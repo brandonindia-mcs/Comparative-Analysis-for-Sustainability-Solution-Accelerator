@@ -4,29 +4,37 @@
 targetScope = 'subscription'
 
 // NEW
-var resourceprefix = padLeft(take(uniqueString(deployment().name), 5), 5, '0')
+// var resourceprefix = padLeft(take(uniqueString(deployment().name), 5), 5, '0')
 // EXISTING
-// var resourceprefix = 'xxxxx'
+var resourceprefix = '4s66o'
 
 // Create a resource group
 resource gs_resourcegroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: 'rg-esgdocanalysis${resourceprefix}'
   location: deployment().location
 }
-output gs_resourcegroup_name string = gs_resourcegroup.name
+//output gs_resourcegroup_name string = gs_resourcegroup.name
 
 
-/*
+// /*
 // Create AKS Cluster
+// Standard_D4ds_v5   $132  4|16|6400
+// Standard_D2ds_v5   $66   2|8|3750
+// B2pls_v2   $24   2|4|3750
 module gs_aks 'modules/azurekubernetesservice.bicep' = {
   name: 'aks-esgdocanalysis${resourceprefix}'
   scope: gs_resourcegroup
   params: {
     aksName: 'aks-esgdocanalysis${resourceprefix}'
+    aksVersion:'1.31.5'
+    aksAgentVMSize:'Standard_D2ds_v5'
+    aksAgentPoolCount:2
+    aksAppVMSize:'Standard_D2ds_v5'
+    aksAppPoolCount:2
     location: deployment().location
   }
 }
-output gs_aks_name string = gs_aks.outputs.createdAksName
+//output gs_aks_name string = gs_aks.outputs.createdAksName
 
 // Create Container Registry
 module gs_containerregistry 'modules/azurecontainerregistry.bicep' = {
@@ -40,11 +48,134 @@ module gs_containerregistry 'modules/azurecontainerregistry.bicep' = {
     gs_aks
   ]
 }
-output gs_containerregistry_name string = gs_containerregistry.outputs.createdAcrName
-output gs_containerregistry_endpoint string = gs_containerregistry.outputs.acrEndpoint
+//output gs_containerregistry_name string = gs_containerregistry.outputs.createdAcrName
+//output gs_containerregistry_endpoint string = gs_containerregistry.outputs.acrEndpoint
 // */
 
-/*
+// /*
+// Create a storage account
+module gs_storageaccount 'modules/azurestorageaccount.bicep' = {
+  name: 'blobesgdocanalysis${resourceprefix}'
+  scope: gs_resourcegroup
+  params: {
+    storageAccountName: 'blob${resourceprefix}'
+    location: deployment().location
+  }
+}
+//output gs_storageaccount_name string = gs_storageaccount.outputs.storageAccountName
+// */
+
+// /*
+// Create a Azure Search Service
+module gs_azsearch 'modules/azuresearch.bicep' = {
+  name: 'search-esgdocanalysis${resourceprefix}'
+  scope: gs_resourcegroup
+  params: {
+    searchServiceName: 'search-${resourceprefix}'
+    location: deployment().location
+  }
+}
+//output gs_azsearch_name string = gs_azsearch.outputs.searchServiceName
+// */
+
+// /*
+// Create Azure Cognitive Service
+module gs_azcognitiveservice 'modules/azurecognitiveservice.bicep' = {
+  name: 'cognitiveservice-esgdocanalysis${resourceprefix}'
+  scope: gs_resourcegroup
+  params: {
+    cognitiveServiceName: 'cognitiveservice-esgdocanalysis${resourceprefix}'
+    location: deployment().location
+  }
+}
+//output gs_azcognitiveservice_name string = gs_azcognitiveservice.outputs.cognitiveServiceName
+//output gs_azcognitiveservice_endpoint string = gs_azcognitiveservice.outputs.cognitiveServiceEndpoint
+// */
+
+// /*
+// Create Azure Open AI Service
+module gs_openaiservice 'modules/azureopenaiservice.bicep' = {
+  name: 'openaiservice-esgdocanalysis${resourceprefix}'
+  scope: gs_resourcegroup
+  params: {
+    openAIServiceName: 'openaiservice-esgdocanalysis${resourceprefix}'
+    // GPT-4-32K model & GPT-4o available Data center information.
+    // https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models#gpt-4    
+    location: deployment().location
+  }
+}
+//output gs_openaiservice_name string = gs_openaiservice.outputs.openAIServiceName
+//output gs_openaiservice_location string = gs_openaiservice.outputs.oopenAIServiceLocation
+//output gs_openaiservice_endpoint string = gs_openaiservice.outputs.openAIServiceEndpoint
+// */
+
+// /*
+// Due to limited Quota, not easy to control per each model deployment.
+// Set the minimum capacity of each model
+// Based on customer's Model capacity, it needs to be updated in Azure Portal.
+module gs_openaiservicemodels_gpt4o 'modules/azureopenaiservicemodel.bicep' = {
+  scope: gs_resourcegroup
+  name: 'gpt-4o${resourceprefix}'
+  params: {
+    parentResourceName: gs_openaiservice.outputs.openAIServiceName
+    name: 'gpt-4o${resourceprefix}'
+    model: {
+      name: 'gpt-4o'
+      version: '2024-05-13'
+      raiPolicyName: ''
+      capacity: 1
+      scaleType: 'Standard'
+    }
+  }
+}
+//output gs_openaiservicemodels_gpt4o_model_name string = gs_openaiservicemodels_gpt4o.outputs.deployedModelName
+//output gs_openaiservicemodels_gpt4o_model_id string = gs_openaiservicemodels_gpt4o.outputs.deployedModelId
+// */
+
+// /*
+module gs_openaiservicemodels_gpt4_32k 'modules/azureopenaiservicemodel.bicep' = {
+  scope: gs_resourcegroup
+  name: 'gpt-432k${resourceprefix}'
+  params: {
+    parentResourceName: gs_openaiservice.outputs.openAIServiceName
+    name: 'gpt-432k${resourceprefix}'
+    model: {
+      name: 'gpt-4o-mini'
+      version: '2024-07-18'
+      raiPolicyName: ''
+      capacity: 1
+      scaleType: 'Manual'
+    }
+  }
+}
+//output gs_openaiservicemodels_gpt4_32k_model_name string = gs_openaiservicemodels_gpt4_32k.outputs.deployedModelName
+//output gs_openaiservicemodels_gpt4_32k_model_id string = gs_openaiservicemodels_gpt4_32k.outputs.deployedModelId
+// */
+
+// /*
+module gs_openaiservicemodels_text_embedding 'modules/azureopenaiservicemodel.bicep' = {
+  scope: gs_resourcegroup
+  name: 'textembedding${resourceprefix}'
+  params: {
+    parentResourceName: gs_openaiservice.outputs.openAIServiceName
+    name: 'textembedding${resourceprefix}'
+    model: {
+      name: 'text-embedding-3-large'
+      version: '1'
+      raiPolicyName: ''
+      capacity: 1
+      scaleType: 'Standard'
+    }
+  }
+  dependsOn: [
+    gs_openaiservicemodels_gpt4_32k
+  ]
+}
+//output gs_openaiservicemodels_text_embedding_model_name string = gs_openaiservicemodels_text_embedding.outputs.deployedModelName
+//output gs_openaiservicemodels_text_embedding_model_id string = gs_openaiservicemodels_text_embedding.outputs.deployedModelId
+// */
+
+// /*
 // Create Teams Connection for Logic App
 module gs_teamsconnection 'modules/teamsconnection.bicep' = {
   name: 'teams'
@@ -55,7 +186,7 @@ module gs_teamsconnection 'modules/teamsconnection.bicep' = {
 }
 // */
 
-/*
+// /*
 var docregistprocesswatcher = (loadTextContent('logicapp/documentprocesswatcher.json'))
 var replacedDocregistprocesswatcher = json(replace(
   replace(
@@ -83,11 +214,11 @@ module gs_logicapp_docregistprocesswatcher 'modules/azurelogicapp.bicep' = {
     gs_teamsconnection
   ]
 }
-output gs_logicapp_docregistprocesswatcher_name string = gs_logicapp_docregistprocesswatcher.outputs.logicAppName
-output gs_logicapp_docregistprocesswatcher_endpoint string = gs_logicapp_docregistprocesswatcher.outputs.logicAppEndpoint
+//output gs_logicapp_docregistprocesswatcher_name string = gs_logicapp_docregistprocesswatcher.outputs.logicAppName
+//output gs_logicapp_docregistprocesswatcher_endpoint string = gs_logicapp_docregistprocesswatcher.outputs.logicAppEndpoint
 // */
 
-/*
+// /*
 var benchmarkprocesswatcher = (loadTextContent('logicapp/bechmarkprocesswatcher.json'))
 var replacedbenchmarkprocesswatcher = json(replace(
   replace(
@@ -114,11 +245,11 @@ module gs_logicapp_benchmarkprocesswatcher 'modules/azurelogicapp.bicep' = {
     gs_teamsconnection
   ]
 }
-output gs_logicapp_benchmarkprocesswatcher_name string = gs_logicapp_benchmarkprocesswatcher.outputs.logicAppName
-output gs_logicapp_benchmarkprocesswatcher_endpoint string = gs_logicapp_benchmarkprocesswatcher.outputs.logicAppEndpoint
+//output gs_logicapp_benchmarkprocesswatcher_name string = gs_logicapp_benchmarkprocesswatcher.outputs.logicAppName
+//output gs_logicapp_benchmarkprocesswatcher_endpoint string = gs_logicapp_benchmarkprocesswatcher.outputs.logicAppEndpoint
 // */
 
-/*
+// /*
 var gapanalysisprocesswatcher = (loadTextContent('logicapp/gapanalysisprocesswatcher.json'))
 var replacedgapanalysisprocesswatcher = json(replace(
   replace(
@@ -145,137 +276,21 @@ module gs_logicapp_ProcessWatcher 'modules/azurelogicapp.bicep' = {
     gs_teamsconnection
   ]
 }
-output gs_logicapp_ProcessWatcher_name string = gs_logicapp_ProcessWatcher.outputs.logicAppName
-output gs_logicapp_processwatcher_endpoint string = gs_logicapp_ProcessWatcher.outputs.logicAppEndpoint
+//output gs_logicapp_ProcessWatcher_name string = gs_logicapp_ProcessWatcher.outputs.logicAppName
+//output gs_logicapp_processwatcher_endpoint string = gs_logicapp_ProcessWatcher.outputs.logicAppEndpoint
 // */
 
-/*
-// Create a storage account
-module gs_storageaccount 'modules/azurestorageaccount.bicep' = {
-  name: 'blobesgdocanalysis${resourceprefix}'
+// /*
+// Create Azure Cosmos DB Mongo
+module gs_cosmosdb 'modules/azurecosmosdb.bicep' = {
+  name: 'cosmosdb-esgdocanalysis${resourceprefix}'
   scope: gs_resourcegroup
   params: {
-    storageAccountName: 'blob${resourceprefix}'
+    cosmosDbAccountName: 'cosmosdb-esgdocanalysis${resourceprefix}'
     location: deployment().location
   }
 }
-output gs_storageaccount_name string = gs_storageaccount.outputs.storageAccountName
-// */
-
-/*
-// Create a Azure Search Service
-module gs_azsearch 'modules/azuresearch.bicep' = {
-  name: 'search-esgdocanalysis${resourceprefix}'
-  scope: gs_resourcegroup
-  params: {
-    searchServiceName: 'search-${resourceprefix}'
-    location: deployment().location
-  }
-}
-output gs_azsearch_name string = gs_azsearch.outputs.searchServiceName
-// */
-
-/*
-// Create Azure Cognitive Service
-module gs_azcognitiveservice 'modules/azurecognitiveservice.bicep' = {
-  name: 'cognitiveservice-esgdocanalysis${resourceprefix}'
-  scope: gs_resourcegroup
-  params: {
-    cognitiveServiceName: 'cognitiveservice-esgdocanalysis${resourceprefix}'
-    location: deployment().location
-  }
-}
-output gs_azcognitiveservice_name string = gs_azcognitiveservice.outputs.cognitiveServiceName
-output gs_azcognitiveservice_endpoint string = gs_azcognitiveservice.outputs.cognitiveServiceEndpoint
-// */
-
-/*
-// Create Azure Open AI Service
-module gs_openaiservice 'modules/azureopenaiservice.bicep' = {
-  name: 'openaiservice-esgdocanalysis${resourceprefix}'
-  scope: gs_resourcegroup
-  params: {
-    openAIServiceName: 'openaiservice-esgdocanalysis${resourceprefix}'
-    // GPT-4-32K model & GPT-4o available Data center information.
-    // https://learn.microsoft.com/en-us/azure/ai-services/openai/concepts/models#gpt-4    
-    location: deployment().location
-  }
-}
-output gs_openaiservice_name string = gs_openaiservice.outputs.openAIServiceName
-output gs_openaiservice_location string = gs_openaiservice.outputs.oopenAIServiceLocation
-output gs_openaiservice_endpoint string = gs_openaiservice.outputs.openAIServiceEndpoint
-// */
-
-/*
-// Due to limited Quota, not easy to control per each model deployment.
-// Set the minimum capacity of each model
-// Based on customer's Model capacity, it needs to be updated in Azure Portal.
-module gs_openaiservicemodels_gpt4o 'modules/azureopenaiservicemodel.bicep' = {
-  scope: gs_resourcegroup
-  name: 'gpt-4o${resourceprefix}'
-  params: {
-    parentResourceName: gs_openaiservice.outputs.openAIServiceName
-    name: 'gpt-4o${resourceprefix}'
-    model: {
-      name: 'gpt-4o'
-      version: '2024-05-13'
-      raiPolicyName: ''
-      capacity: 1
-      scaleType: 'Standard'
-    }
-  }
-  dependsOn: [
-    gs_openaiservice
-  ]
-}
-output gs_openaiservicemodels_gpt4o_model_name string = gs_openaiservicemodels_gpt4o.outputs.deployedModelName
-output gs_openaiservicemodels_gpt4o_model_id string = gs_openaiservicemodels_gpt4o.outputs.deployedModelId
-// */
-
-/*
-module gs_openaiservicemodels_gpt4_32k 'modules/azureopenaiservicemodel.bicep' = {
-  scope: gs_resourcegroup
-  name: 'gpt-432k${resourceprefix}'
-  params: {
-    parentResourceName: gs_openaiservice.outputs.openAIServiceName
-    name: 'gpt-432k${resourceprefix}'
-    model: {
-      name: 'gpt-4-32k'
-      version: '0613'
-      raiPolicyName: ''
-      capacity: 1
-      scaleType: 'Manual'
-    }
-  }
-  dependsOn: [
-    gs_openaiservicemodels_gpt4o
-  ]
-}
-output gs_openaiservicemodels_gpt4_32k_model_name string = gs_openaiservicemodels_gpt4_32k.outputs.deployedModelName
-output gs_openaiservicemodels_gpt4_32k_model_id string = gs_openaiservicemodels_gpt4_32k.outputs.deployedModelId
-// */
-
-/*
-module gs_openaiservicemodels_text_embedding 'modules/azureopenaiservicemodel.bicep' = {
-  scope: gs_resourcegroup
-  name: 'textembedding${resourceprefix}'
-  params: {
-    parentResourceName: gs_openaiservice.outputs.openAIServiceName
-    name: 'textembedding${resourceprefix}'
-    model: {
-      name: 'text-embedding-3-large'
-      version: '1'
-      raiPolicyName: ''
-      capacity: 1
-      scaleType: 'Standard'
-    }
-  }
-  dependsOn: [
-    gs_openaiservicemodels_gpt4_32k
-  ]
-}
-output gs_openaiservicemodels_text_embedding_model_name string = gs_openaiservicemodels_text_embedding.outputs.deployedModelName
-output gs_openaiservicemodels_text_embedding_model_id string = gs_openaiservicemodels_text_embedding.outputs.deployedModelId
+//output gs_cosmosdb_name string = gs_cosmosdb.outputs.cosmosDbAccountName
 // */
 
 /*
@@ -289,7 +304,39 @@ module gs_appinsights 'modules/azureappingisht.bicep' = {
     location: deployment().location
   }
 }
-output gs_appinsights_name string = gs_appinsights.outputs.appInsightsName
-output gs_appinsights_instrumentationkey string = gs_appinsights.outputs.instrumentationKey
+//output gs_appinsights_name string = gs_appinsights.outputs.appInsightsName
+//output gs_appinsights_instrumentationkey string = gs_appinsights.outputs.instrumentationKey
 // */
 
+// ORIGINAL  ORDERING
+// return all resource names as a output
+output gs_resourcegroup_name string = 'rg-esgdocanalysis${resourceprefix}'
+output gs_storageaccount_name string = gs_storageaccount.outputs.storageAccountName
+output gs_azsearch_name string = gs_azsearch.outputs.searchServiceName
+output gs_logicapp_docregistprocesswatcher_name string = gs_logicapp_docregistprocesswatcher.outputs.logicAppName
+output gs_logicapp_benchmarkprocesswatcher_name string = gs_logicapp_benchmarkprocesswatcher.outputs.logicAppName
+output gs_logicapp_ProcessWatcher_name string = gs_logicapp_ProcessWatcher.outputs.logicAppName
+output gs_aks_name string = gs_aks.outputs.createdAksName
+output gs_containerregistry_name string = gs_containerregistry.outputs.createdAcrName
+output gs_azcognitiveservice_name string = gs_azcognitiveservice.outputs.cognitiveServiceName
+output gs_azcognitiveservice_endpoint string = gs_azcognitiveservice.outputs.cognitiveServiceEndpoint
+output gs_openaiservice_name string = gs_openaiservice.outputs.openAIServiceName
+output gs_openaiservice_location string = gs_openaiservice.outputs.oopenAIServiceLocation
+output gs_openaiservice_endpoint string = gs_openaiservice.outputs.openAIServiceEndpoint
+output gs_openaiservicemodels_gpt4o_model_name string = gs_openaiservicemodels_gpt4o.outputs.deployedModelName
+output gs_openaiservicemodels_gpt4o_model_id string = gs_openaiservicemodels_gpt4o.outputs.deployedModelId
+output gs_openaiservicemodels_gpt4_32k_model_name string = gs_openaiservicemodels_gpt4_32k.outputs.deployedModelName
+output gs_openaiservicemodels_gpt4_32k_model_id string = gs_openaiservicemodels_gpt4_32k.outputs.deployedModelId
+output gs_openaiservicemodels_text_embedding_model_name string = gs_openaiservicemodels_text_embedding.outputs.deployedModelName
+output gs_openaiservicemodels_text_embedding_model_id string = gs_openaiservicemodels_text_embedding.outputs.deployedModelId
+output gs_cosmosdb_name string = gs_cosmosdb.outputs.cosmosDbAccountName
+// output gs_appinsights_name string = gs_appinsights.outputs.appInsightsName
+// output gs_appinsights_instrumentationkey string = gs_appinsights.outputs.instrumentationKey
+
+// return all Azure logic apps service endpoints
+output gs_logicapp_docregistprocesswatcher_endpoint string = gs_logicapp_docregistprocesswatcher.outputs.logicAppEndpoint
+output gs_logicapp_benchmarkprocesswatcher_endpoint string = gs_logicapp_benchmarkprocesswatcher.outputs.logicAppEndpoint
+output gs_logicapp_processwatcher_endpoint string = gs_logicapp_ProcessWatcher.outputs.logicAppEndpoint
+
+// return acr url
+output gs_containerregistry_endpoint string = gs_containerregistry.outputs.acrEndpoint

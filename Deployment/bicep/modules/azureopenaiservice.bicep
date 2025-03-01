@@ -4,7 +4,7 @@
 param openAIServiceName string
 param location string = resourceGroup().location
 
-resource openAIService 'Microsoft.CognitiveServices/accounts@2023-05-01' = {
+resource openAIService 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
   name: openAIServiceName
   location: location
   kind: 'OpenAI'
