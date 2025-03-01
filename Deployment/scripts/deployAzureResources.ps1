@@ -296,7 +296,7 @@ try {
     ###############################################################
     # Step 1 : Deploy Azure resources
     $msg = "Deploy Azure resources"
-    Write-Host "$('#' * 30) $($MyInvocation.MyCommand.Name) ($(Get-CurrentLine)) $msg $('#' * 30)"  -ForegroundColor Yellow
+    Write-Host "$('#' * 5) $($MyInvocation.MyCommand.Name) $('#' * 15) ($(Get-CurrentLine)) $msg $('#' * 30)"  -ForegroundColor Yellow
     ###############################################################
   
 Write-Host "$(Get-CurrentLine) `$deploymentResult is $deploymentResult"
@@ -322,7 +322,7 @@ try {
     ###############################################################
     # Step 2 : Get Secrets from Azure resources
     $msg = "Get Secrets from Azure resources"
-    Write-Host "$('#' * 30) $($MyInvocation.MyCommand.Name) ($(Get-CurrentLine)) $msg $('#' * 30)" -ForegroundColor Yellow
+    Write-Host "$('#' * 5) $($MyInvocation.MyCommand.Name) $('#' * 15) ($(Get-CurrentLine)) $msg $('#' * 30)" -ForegroundColor Yellow
     ###############################################################
     # Get the storage account key
 $msg = "az storage account keys list --account-name $deploymentResult.StorageAccountName --resource-group $deploymentResult.ResourceGroupName"
@@ -389,7 +389,7 @@ try {
     ######################################################################################################################
     # Step 3 : Update App Configuration files with Secrets and information for AI Service and Kernel Memory Service.
     $msg = "Update App Configuration files with Secrets and information for AI Service and Kernel Memory Service."
-    Write-Host "$('#' * 30) $($MyInvocation.MyCommand.Name) ($(Get-CurrentLine)) $msg $('#' * 30)"  -ForegroundColor Yellow
+    Write-Host "$('#' * 5) $($MyInvocation.MyCommand.Name) $('#' * 15) ($(Get-CurrentLine)) $msg $('#' * 30)"  -ForegroundColor Yellow
     ######################################################################################################################
 
     # Step 3-1 Loading aiservice's configuration file template then replace the placeholder with the actual values
@@ -462,7 +462,7 @@ try {
     ######################################################################################################################
     # Step 4 : docker build and push container images to Azure Container Registry
     $msg = "docker build and push container images to Azure Container Registry"
-    Write-Host "$('#' * 30) $($MyInvocation.MyCommand.Name) ($(Get-CurrentLine)) $msg $('#' * 30)"  -ForegroundColor Yellow
+    Write-Host "$('#' * 5) $($MyInvocation.MyCommand.Name) $('#' * 15) ($(Get-CurrentLine)) $msg $('#' * 30)"  -ForegroundColor Yellow
     ######################################################################################################################
     
     # 1. Login to Azure Container Registry
@@ -493,7 +493,7 @@ try {
     ######################################################################################################################
     # Step 5 : Configure Kubernetes Infrastructure
     $msg = "Configure Kubernetes Infrastructure"
-    Write-Host "$('#' * 30) $($MyInvocation.MyCommand.Name) ($(Get-CurrentLine)) $msg $('#' * 30)"  -ForegroundColor Yellow
+    Write-Host "$('#' * 5) $($MyInvocation.MyCommand.Name) $('#' * 15) ($(Get-CurrentLine)) $msg $('#' * 30)"  -ForegroundColor Yellow
     ######################################################################################################################
     # 0. Attach Container Registry to AKS
     # Write-Host "Attach Container Registry to AKS" -ForegroundColor Green
@@ -662,7 +662,7 @@ try {
     #########################################################################################################################################
     # Step 6 : Update Kubernetes configuration files with the FQDN, Container Image Path and Email address for the certificate management
     $msg = "Update Kubernetes configuration files with the FQDN, Container Image Path and Email address for the certificate management"
-    Write-Host "$('#' * 30) $($MyInvocation.MyCommand.Name) ($(Get-CurrentLine)) $msg $('#' * 30)"  -ForegroundColor Yellow
+    Write-Host "$('#' * 5) $($MyInvocation.MyCommand.Name) $('#' * 15) ($(Get-CurrentLine)) $msg $('#' * 30)"  -ForegroundColor Yellow
     #########################################################################################################################################
 
     # 6.1 Update deploy.certclusterissuer.yaml.template file and save as deploy.certclusterissuer.yaml
@@ -697,7 +697,7 @@ try {
     ########################################################################################################################################################
     # Step 7 : Configure AKS (deploy Cert Manager, Ingress Controller) and Deploy Images on the kubernetes cluster
     $msg = "Configure AKS (deploy Cert Manager, Ingress Controller) and Deploy Images on the kubernetes cluster"
-    Write-Host "$('#' * 30) $($MyInvocation.MyCommand.Name) ($(Get-CurrentLine)) $msg $('#' * 30)"  -ForegroundColor Yellow
+    Write-Host "$('#' * 5) $($MyInvocation.MyCommand.Name) $('#' * 15) ($(Get-CurrentLine)) $msg $('#' * 30)"  -ForegroundColor Yellow
     ########################################################################################################################################################
     function Wait-ForCertManager {
         Write-Host "$(Get-CurrentLine) Wait-ForCertManager"
@@ -748,7 +748,7 @@ try {
     #####################################################################
     # Step 8 : Display the deployment result and following instructions
     $msg = "Deployment completed successfully."
-    Write-Host "$('#' * 30) $($MyInvocation.MyCommand.Name) ($(Get-CurrentLine)) $msg $('#' * 30)" -ForegroundColor Green
+    Write-Host "$('#' * 5) $($MyInvocation.MyCommand.Name) $('#' * 15) ($(Get-CurrentLine)) $msg $('#' * 30)" -ForegroundColor Green
     #####################################################################
     $messageString = "Deployment completed successfully. Please find the deployment details below: `r`n" +
                     "1. Check your Logic Apps Teams Channel connection `n`r" +
@@ -777,19 +777,20 @@ catch {
 # $instance.MapResult($jsonObject)
 #####
 $msg = ""
-Write-Host "$('#***' * 15) START $($MyInvocation.MyCommand.Name) ($(Get-CurrentLine)) $msg $('\' * 20)" -ForegroundColor Yellow
+Write-Host "***** START $('*' * 30) ($(Get-CurrentLine)) $msg $('*' * 40)" -ForegroundColor Yellow
 $deploymentResult = [DeploymentResult]::new()
 
 $json = ''
-$jsonfile = "./file.json"
+$filePath = "JSONOBJ.scratch.json"
 try {
+If ( -not (Test-Path -Path $filePath)) {
 $json = Step1
-Set-Content -Path $jsonfile -Value $json
+# SAVE JSON FOR LATER, CAREFUL NOT TO OVERWRITE
+Set-Content -Path $filePath -Value $json
+}
 try {
-# Specify the path to the file
-# $filePath = "JSONOBJ.scratch.json"
 # Read the contents of the file and store it in a string variable
-# $json = Get-Content -Path $filePath -Raw
+$json = Get-Content -Path $filePath -Raw
 $jsonObject = $json | ConvertFrom-Json
 $deploymentResult.MapResult($jsonObject)
 Step2
