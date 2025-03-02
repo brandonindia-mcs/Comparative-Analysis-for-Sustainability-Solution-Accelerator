@@ -62,11 +62,12 @@ function LoginAzure([string]$subscriptionID) {
     Write-Host "$('#' * 10) $(Get-CurrentLine)::$($MyInvocation.MyCommand.Name)" -ForegroundColor Blue
     try {
         # Write-Host "Log in to Azure.....`r`n" -ForegroundColor Yellow
-        # az login -t v2.fabric-crew.com
+        # az login -t $env:AZTENANT
         # az account set --subscription $subscriptionID
         # Write-Host "Switched subscription to '$subscriptionID' `r`n" -ForegroundColor Yellow
-        Write-Host $(az account show --query "{Subscription:name,SubscriptionID:id,Type:user.type,User:user.name,Tenant:tenantId}" -o json) -ForegroundColor Yellow
-        
+        $json = $(az account show --query "{Subscription:name,SubscriptionID:id,Type:user.type,User:user.name,Tenant:tenantId}" -o json)
+        $jsonObject = $json | ConvertFrom-Json
+        $jsonObject
     } catch {
         Write-Host "$($MyInvocation.MyCommand.Name): no login" -ForegroundColor Red
         Write-Host $_.Exception.Message -ForegroundColor Red
@@ -844,11 +845,11 @@ $CWD = $(Get-Location)
 #####
 Start-Transcript -Path $LOG -Append -NoClobber
 $STAMP = $(Get-Date -Format "yyyyMMdd_T_hhmmss")
-$msg = ""
+$msg = $null
 Write-Host "***** START $('*' * 30) ($(Get-CurrentLine)) $msg" -ForegroundColor Green
 
 $deploymentResult = [DeploymentResult]::new()
-$json
+$json = $null
 $filePath = "JSONOBJ-4.scratch.json"
 try {
 If ( -not (Test-Path -Path $filePath)) {
