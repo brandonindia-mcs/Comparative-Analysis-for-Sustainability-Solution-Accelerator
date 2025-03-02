@@ -604,10 +604,7 @@ Write-Host ($(Get-CurrentLine)) vmssResourceGroupName: $vmssResourceGroupName -F
 Write-Host "$(Get-CurrentLine) az vmss list --resource-group $vmssResourceGroupName --query '[0].name' --output tsv" -ForegroundColor DarkMagenta
     $vmssName = $(az vmss list --resource-group $vmssResourceGroupName --query "[0].name" --output tsv)
 Write-Host ($(Get-CurrentLine)) vmssName: $vmssName -ForegroundColor Cyan
-    # for ($i=0;$i -lt 2;$i++) {
-    #     az vmss update-instances -g MC_rg-esgdocanalysis4s66o_aks-esgdocanalysis4s66o_eastus2 -n aks-agentpool1-76312489-vmss --instance-ids $i
-    # }
-    # az vmss update-instances -g MC_rg-esgdocanalysis4s66o_aks-esgdocanalysis4s66o_eastus2 -n aks-agentpool1-76312489-vmss --instance-ids *
+
     # Create System Assigned Managed Identity for AKS
 Write-Host "$(Get-CurrentLine) az vmss identity assign --resource-group $vmssResourceGroupName --name $vmssName --query systemAssignedIdentity --output tsv" -ForegroundColor DarkMagenta
     $systemAssignedIdentity = $(az vmss identity assign --resource-group $vmssResourceGroupName --name $vmssName --query systemAssignedIdentity --output tsv)
@@ -844,29 +841,22 @@ throw $_
 ###########################################################
 $LOG="~/log/deployAzureResources.20250228T022942.log"
 $CWD = $(Get-Location)
+#####
 Start-Transcript -Path $LOG -Append -NoClobber
 $STAMP = $(Get-Date -Format "yyyyMMdd_T_hhmmss")
-#####
-# Convert the JSON string to a PSCustomObject
-# $jsonObject = $jsonString | ConvertFrom-Json
-# Call the MapResult function
-# $instance.MapResult($jsonObject)
-#####
 $msg = ""
 Write-Host "***** START $('*' * 30) ($(Get-CurrentLine)) $msg" -ForegroundColor Green
+
 $deploymentResult = [DeploymentResult]::new()
-
-$json = ''
+$json
 $filePath = "JSONOBJ-4.scratch.json"
-
 try {
 If ( -not (Test-Path -Path $filePath)) {
 $json = Step1
 # SAVE JSON FOR LATER, CAREFUL NOT TO OVERWRITE
 Set-Content -Path $filePath -Value $json
 }
-
-# Read the contents of the file and store it in a string variable
+# READ THE CONTENTS OF THE FILE AND STORE IT IN A STRING VARIABLE
 $json = Get-Content -Path $filePath -Raw
 $jsonObject = $json | ConvertFrom-Json
 $deploymentResult.MapResult($jsonObject)
