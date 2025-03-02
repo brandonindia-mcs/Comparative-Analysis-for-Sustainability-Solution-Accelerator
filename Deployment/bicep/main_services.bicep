@@ -15,7 +15,7 @@ resource gs_resourcegroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
 }
 //output gs_resourcegroup_name string = gs_resourcegroup.name
 
-
+param aksVersion string = '1.30.7'
 // /*
 // Create AKS Cluster
 // Standard_D4ds_v5   $132  4|16|6400
@@ -26,7 +26,7 @@ module gs_aks 'modules/azurekubernetesservice.bicep' = {
   scope: gs_resourcegroup
   params: {
     aksName: 'aks-esgdocanalysis${resourceprefix}'
-    aksVersion:'1.31.5'
+    aksVersion:aksVersion
     aksAgentVMSize:'Standard_D2ds_v5'
     aksAgentPoolCount:2
     aksAppVMSize:'Standard_D2ds_v5'

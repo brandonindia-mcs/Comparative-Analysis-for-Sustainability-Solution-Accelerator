@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Microsoft Corporation.
 // Licensed under the MIT license.
 
-param aksVersion string = '1.30.7'
+param aksVersion string
 param aksAgentVMSize string = 'Standard_D4ds_v5'
 param aksAgentPoolCount int = 2
 param aksAppVMSize string = 'Standard_D4ds_v5'
@@ -24,19 +24,29 @@ resource aks 'Microsoft.ContainerService/managedClusters@2021-05-01' = {
     dnsPrefix: aksName
     enableRBAC: true
     kubernetesVersion: aksVersion
+    autoUpgradeProfile:{
+        upgradeChannel: 'stable'
+    }
     agentPoolProfiles: [
       {
         name: 'agentpool1'
         count: aksAgentPoolCount
         vmSize: aksAgentVMSize
         mode: 'System'
+        enableAutoScaling:true
+        minCount:2
+        maxCount:5
+
       }
-      {
-        name: 'apppool1'
-        count: aksAppPoolCount
-        vmSize: aksAppVMSize
-        mode: 'System'
-      }
+      // {
+      //   name: 'apppool1'
+      //   count: aksAppPoolCount
+      //   vmSize: aksAppVMSize
+      //   mode: 'User'
+      //   enableAutoScaling:true
+      //   minCount:2
+      //   maxCount:5
+      // }
     ]
     addonProfiles: {
       httpApplicationRouting: {
