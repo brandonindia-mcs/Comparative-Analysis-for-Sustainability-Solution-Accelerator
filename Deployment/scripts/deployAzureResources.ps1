@@ -41,8 +41,6 @@ function LoginAzure([string]$subscriptionID) {
         # az login -t $env:AZTENANT
         # az account set --subscription $subscriptionID
         # Write-Host "Switched subscription to '$subscriptionID' `r`n" -ForegroundColor Yellow
-        $json = $(az account show --query "{Subscription:name,SubscriptionID:id,Type:user.type,User:user.name,Tenant:tenantId}" -o json)
-        Write-Host "$($json | ConvertFrom-Json | ConvertTo-Json)" -ForegroundColor Green
         return
     } catch {
         Write-Host "$($MyInvocation.MyCommand.Name): no login" -ForegroundColor Red
@@ -60,27 +58,31 @@ function DeployAzureResources([string]$location) {
         $randomNumber = Get-Random -Minimum 0 -Maximum 99999
         # Pad the number with leading zeros to ensure it is 5 digits long
         $randomNumberPadded = $randomNumber.ToString("D5")
-        $subscriptionDeployment = $randomNumberPadded+"ESG_Document_Analysis_Deployment"
+        # Make deployment name unique by appending random number
+        $subscriptionDeployment = $STAMP+"-"+$randomNumberPadded+"-ESG_Document_Analysis_Deployment"
 
         # Perform a what-if deployment to preview changes
-        Write-Host "Evaluating Deployment resource availabilities to preview changes..." -ForegroundColor Yellow
-        $whatIfResult = az deployment sub what-if --template-file ../bicep/main_services.bicep -l $location -n $subscriptionDeployment
-
-        if ($LASTEXITCODE -ne 0) {
-            Write-Host "There might be something wrong with your deployment." -ForegroundColor Red
-            Write-Host $whatIfResult -ForegroundColor Red
-            exit 1            
-        }
-
+        Write-Host "*** TESTING DEPLOYMENT *** NO WHAT-IF" -ForegroundColor DarkRed
+        # Write-Host "Evaluating Deployment resource availabilities to preview changes..." -ForegroundColor Yellow
+        # $whatIfResult = az deployment sub what-if --template-file ../$iac_dir/main_services.bicep -l $location -n $subscriptionDeployment
+        # if ($LASTEXITCODE -ne 0) {
+        #     Write-Host "There might be something wrong with your deployment." -ForegroundColor Red
+        #     Write-Host $whatIfResult -ForegroundColor Red
+        #     exit 1            
+        # }
         Write-Host "Deployment resource availabilities have been evaluated successfully." -ForegroundColor Green
         Write-Host "$(Get-CurrentLine) Staring subscription Deployment: $subscriptionDeployment`r`n" -ForegroundColor Yellow
-      
-        # Make deployment name unique by appending random number ###  --parameters @bicep/main_services.json --parameters is_new=true
-        $deploymentResult = az deployment sub create --template-file ../bicep/main_services.bicep -l $location -n "$subscriptionDeployment"
+         ###  --parameters @bicep/main_services.json --parameters is_new=true
+        $deployment_output = az deployment sub create --template-file ../$iac_dir/main_services.bicep -l $location -n "$subscriptionDeployment"
 Write-Host "$(Get-CurrentLine) az deployment sub create --template-file ../bicep/main_services.bicep -l $location -n $subscriptionDeployment" -ForegroundColor DarkMagenta
-Write-Host "$(Get-CurrentLine) `$deploymentResult is $deploymentResult"
+Write-Host "$(Get-CurrentLine) `$deployment_output is $deployment_output"
 
-        return $deploymentResult
+        $joinedString = $deployment_output -join ""
+        $jsonString = ConvertFrom-Json $joinedString
+        # Map the deployment result to DeploymentResult object
+        $deploymentResult.MapResult($jsonString)
+        persist_local($deployment_output)
+        return $jsonString
     } catch {
         Write-Host "$($MyInvocation.MyCommand.Name):An error occurred during the deployment process:" -ForegroundColor Red
         Write-Host $_.Exception.Message -ForegroundColor Red
@@ -91,8 +93,8 @@ Write-Host "$(Get-CurrentLine) `$deploymentResult is $deploymentResult"
 }
 
 function DisplayResult([pscustomobject]$jsonString) {
-    Write-Host "$('#' * 10) $(Get-CurrentLine)::$($MyInvocation.MyCommand.Name)" -ForegroundColor Blue
-    Write-Host "$(Get-CurrentLine) DisplayResult"
+Write-Host "$('#' * 10) $(Get-CurrentLine)::$($MyInvocation.MyCommand.Name)" -ForegroundColor Blue
+Write-Host "$(Get-CurrentLine) DisplayResult"
     $resourcegroupName = $jsonString.properties.outputs.gs_resourcegroup_name.value
     $storageAccountName = $jsonString.properties.outputs.gs_storageaccount_name.value
     $azsearchServiceName = $jsonString.properties.outputs.gs_azsearch_name.value
@@ -131,6 +133,8 @@ function DisplayResult([pscustomobject]$jsonString) {
     Write-Host "($azLogicAppGapAnalysisProcessWatcherUrl) " -ForegroundColor Yellow
     Write-Host "--------------------------------------------`r`n" -ForegroundColor White
 }
+
+
 class DeploymentResult {
     [string]$ResourceGroupName
     [string]$StorageAccountName
@@ -243,8 +247,8 @@ function Get-LogicAppTriggerUrl {
         [string]$logicAppName,
         [string]$triggerName
     )
-    Write-Host "$('#' * 10) $(Get-CurrentLine)::$($MyInvocation.MyCommand.Name)" -ForegroundColor Blue
-    Write-Host "$(Get-CurrentLine) Get-LogicAppTriggerUrl"
+Write-Host "$('#' * 10) $(Get-CurrentLine)::$($MyInvocation.MyCommand.Name)" -ForegroundColor Blue
+Write-Host "$(Get-CurrentLine) Get-LogicAppTriggerUrl"
     $url = "https://management.azure.com/subscriptions/$subscriptionId/resourceGroups/$resourceGroupName/providers/Microsoft.Logic/workflows/$logicAppName/triggers/$triggerName/listCallbackUrl?api-version=2016-06-01"
     $callbackUrl = az rest --method POST --uri $url --query "value" -o tsv
     return $callbackUrl
@@ -252,21 +256,21 @@ function Get-LogicAppTriggerUrl {
 
 # replace placeholders in a template with actual values
 function Invoke-PlaceholdersReplacement($template, $placeholders) {
-    Write-Host "$('#' * 10) $(Get-CurrentLine)::$($MyInvocation.MyCommand.Name)" -ForegroundColor Blue
-    Write-Host "$(Get-CurrentLine) Invoke-PlaceholdersReplacement"
+Write-Host "$('#' * 10) $(Get-CurrentLine)::$($MyInvocation.MyCommand.Name)" -ForegroundColor Blue
+Write-Host "$(Get-CurrentLine) Invoke-PlaceholdersReplacement"
     foreach ($key in $placeholders.Keys) {
         $template = $template -replace $key, $placeholders[$key]
     }
     return $template
 }
-# get the external IP address of a service
+# Function to get the external IP address of a service
 function Get-ExternalIP {
     param (
         [string]$serviceName,
         [string]$namespace
     )
-    Write-Host "$('#' * 10) $(Get-CurrentLine)::$($MyInvocation.MyCommand.Name)" -ForegroundColor Blue
-    Write-Host "$(Get-CurrentLine) Get-ExternalIP"
+Write-Host "$('#' * 10) $(Get-CurrentLine)::$($MyInvocation.MyCommand.Name)" -ForegroundColor Blue
+Write-Host "$(Get-CurrentLine) Get-ExternalIP"
     $externalIP = kubectl get svc $serviceName -n $namespace -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
     return $externalIP
 }
@@ -278,25 +282,22 @@ function deploy_main_services() {
     Write-Host "$('#' * 5) Step1 $($MyInvocation.MyCommand.Name) $('#' * 10) $(Get-CurrentLine) $msg" -ForegroundColor Blue
     ###############################################################
   
-Write-Host "$(Get-CurrentLine) `$deploymentResult is $deploymentResult"
-    LoginAzure($subscriptionID)
+Write-Host "$(Get-CurrentLine) `$deploymentResult isa $($deploymentResult.GetType())"
+    Write-Host "*** TESTING DEPLOYMENT *** NO AZURE LOGIN " -ForegroundColor DarkRed
+    # LoginAzure($subscriptionID)
+    $json = $(az account show --query "{Subscription:name,SubscriptionID:id,Type:user.type,User:user.name,Tenant:tenantId}" -o json)
+    Write-Host "$($json | ConvertFrom-Json | ConvertTo-Json)" -ForegroundColor Green
     # Deploy Azure Resources
     Write-Host "Deploying Azure resources in $location region.....`r`n" -ForegroundColor Yellow
     $resultJson = DeployAzureResources($location)
-    # Map the deployment result to DeploymentResult object
-
-    ### MOVED TO MAIN
-    # $deploymentResult.MapResult($resultJson)
-
     # Display the deployment result
     DisplayResult($resultJson)
-    return $resultJson
 }
 function get_service_info() {
     ###############################################################
     # Step 2 : Get Secrets from Azure resources
-    $msg = "Get Secrets from Azure resources"
-    Write-Host "$('#' * 5) Step2 $($MyInvocation.MyCommand.Name) $('#' * 10) $(Get-CurrentLine) $msg" -ForegroundColor Blue
+$msg = "Get Secrets from Azure resources"
+Write-Host "$('#' * 5) Step2 $($MyInvocation.MyCommand.Name) $('#' * 10) $(Get-CurrentLine) $msg" -ForegroundColor Blue
     ###############################################################
     # Get the storage account key
 $msg = "az storage account keys list --account-name $deploymentResult.StorageAccountName --resource-group $deploymentResult.ResourceGroupName"
@@ -355,8 +356,8 @@ Write-Host ($(Get-CurrentLine)) $msg
 function update_app_configs() {
     ######################################################################################################################
     # Step 3 : Update App Configuration files with Secrets and information for AI Service and Kernel Memory Service.
-    $msg = "Update App Configuration files with Secrets and information for AI Service and Kernel Memory Service."
-    Write-Host "$('#' * 5) Step3 $($MyInvocation.MyCommand.Name) $('#' * 10) $(Get-CurrentLine) $msg" -ForegroundColor Blue
+$msg = "Update App Configuration files with Secrets and information for AI Service and Kernel Memory Service."
+Write-Host "$('#' * 5) Step3 $($MyInvocation.MyCommand.Name) $('#' * 10) $(Get-CurrentLine) $msg" -ForegroundColor Blue
     ######################################################################################################################
 
     # Step 3-1 Loading aiservice's configuration file template then replace the placeholder with the actual values
@@ -421,58 +422,77 @@ function update_app_configs() {
 function build_push_container_images() {
     ######################################################################################################################
     # Step 4 : docker build and push container images to Azure Container Registry
-    $msg = "docker build and push container images to Azure Container Registry"
-    Write-Host "$('#' * 5) Step4 $($MyInvocation.MyCommand.Name) $('#' * 10) $(Get-CurrentLine) $msg" -ForegroundColor Blue
+$msg = "docker build and push container images to Azure Container Registry"
+Write-Host "$('#' * 5) Step4 $($MyInvocation.MyCommand.Name) $('#' * 10) $(Get-CurrentLine) $msg" -ForegroundColor Blue
     ######################################################################################################################
     
     # 1. Login to Azure Container Registry
     az acr login --name $deploymentResult.ContainerRegistryName
     $acrNamespace = "esg-ai-docanalysis"
-Write-Host ($(Get-CurrentLine)) "Current Path is $(Get-Location)"
 
     # 2. Build and push the images to Azure Container Registry
     #  2-1. Build and push the AI Service container image to  Azure Container Registry
     $acrAIServiceTag = "$($deploymentResult.ContainerRegistryName).azurecr.io/$acrNamespace/aiservice"
-    Set-Location -Path "../../Services/src/esg-ai-doc-analysis/"
-Write-Host ($(Get-CurrentLine)) "Current Path is $(Get-Location)"
-    $docker = "docker build -t $acrAIServiceTag ."
-Write-Host ($(Get-CurrentLine)) running: $docker
-    Write-Host "skipping docker build" # Invoke-Expression $docker
-Write-Host ($(Get-CurrentLine)) "pushing $acrAIServiceTag" -ForegroundColor Blue
-    $docker = "docker push $acrAIServiceTag"
-Write-Host ($(Get-CurrentLine)) running: $docker
-    Write-Host "skipping docker push" # Invoke-Expression $docker
-Write-Host ($(Get-CurrentLine)) "$acrAIServiceTag pushed" -ForegroundColor Green
-    Set-Location -Path $CWD
-Write-Host ($(Get-CurrentLine)) "Current Path is $(Get-Location)"
+Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrAIServiceTag" -ForegroundColor DarkRed 
+    # docker build ../../Services/src/esg-ai-doc-analysis/. --no-cache -t $acrAIServiceTag
+# Write-Host "*** TESTING DEPLOYMENT *** NO docker push $acrAIServiceTag" -ForegroundColor DarkRed 
+    docker push $acrAIServiceTag
 
     #  2-2. Build and push the Kernel Memory Service container image to Azure Container Registry
     $acrKernelMemoryTag = "$($deploymentResult.ContainerRegistryName).azurecr.io/$acrNamespace/kernelmemory"
-    Set-Location -Path "../../Services/src/kernel-memory/"
-Write-Host ($(Get-CurrentLine)) "Current Path is $(Get-Location)"
-    $docker = "docker build -t $acrKernelMemoryTag ."
-Write-Host ($(Get-CurrentLine)) running: $docker
-    Write-Host "skipping docker build" # Invoke-Expression $docker
-Write-Host ($(Get-CurrentLine)) "pushing $acrKernelMemoryTag" -ForegroundColor Blue
-    $docker = "docker push $acrKernelMemoryTag"
-Write-Host ($(Get-CurrentLine)) running: $docker
-    Write-Host "skipping docker push" # Invoke-Expression $docker
-Write-Host ($(Get-CurrentLine)) "$acrKernelMemoryTag pushed" -ForegroundColor Green
-    Set-Location -Path $CWD
-Write-Host ($(Get-CurrentLine)) "Current Path is $(Get-Location)"
+Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrKernelMemoryTag" -ForegroundColor DarkRed 
+    # docker build ../../Services/src/kernel-memory/. --no-cache -t $acrKernelMemoryTag
+# Write-Host "*** TESTING DEPLOYMENT *** NO docker push $acrKernelMemoryTag" -ForegroundColor DarkRed 
+    docker push $acrKernelMemoryTag
+
+#### DEBUG CODE ####
+#     #  2-1. Build and push the AI Service container image to  Azure Container Registry
+#     $acrAIServiceTag = "$($deploymentResult.ContainerRegistryName).azurecr.io/$acrNamespace/aiservice"    
+# Set-Location -Path "../../Services/src/esg-ai-doc-analysis/"
+# Write-Host ($(Get-CurrentLine)) "Current Path is $(Get-Location)"
+#     # Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrAIServiceTag" -ForegroundColor DarkRed 
+#     $docker = "docker build -t $acrAIServiceTag ."
+# Write-Host ($(Get-CurrentLine)) running: $docker
+#     Invoke-Expression $docker
+# Write-Host ($(Get-CurrentLine)) "pushing $acrAIServiceTag" -ForegroundColor Blue
+#     $docker = "docker push $acrAIServiceTag"
+# Write-Host ($(Get-CurrentLine)) running: $docker
+#     # Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrAIServiceTag" -ForegroundColor DarkRed 
+#     Invoke-Expression $docker
+# Write-Host ($(Get-CurrentLine)) "$acrAIServiceTag pushed" -ForegroundColor Green
+#     Set-Location -Path $CWD
+# Write-Host ($(Get-CurrentLine)) "Current Path is $(Get-Location)"
+    
+#     #  2-2. Build and push the Kernel Memory Service container image to Azure Container Registry
+#     $acrKernelMemoryTag = "$($deploymentResult.ContainerRegistryName).azurecr.io/$acrNamespace/kernelmemory"
+# Set-Location -Path "../../Services/src/kernel-memory/"
+# Write-Host ($(Get-CurrentLine)) "Current Path is $(Get-Location)"
+#     # Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrKernelMemoryTag" -ForegroundColor DarkRed 
+#     $docker = "docker build -t $acrKernelMemoryTag ."
+# Write-Host ($(Get-CurrentLine)) running: $docker
+#     Invoke-Expression $docker
+# Write-Host ($(Get-CurrentLine)) "pushing $acrKernelMemoryTag" -ForegroundColor Blue
+#     $docker = "docker push $acrKernelMemoryTag"
+# Write-Host ($(Get-CurrentLine)) running: $docker
+# #     Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrAIServiceTag" -ForegroundColor DarkRed 
+#     Invoke-Expression $docker
+# Write-Host ($(Get-CurrentLine)) "$acrKernelMemoryTag pushed" -ForegroundColor Green
+#     Set-Location -Path $CWD
+# Write-Host ($(Get-CurrentLine)) "Current Path is $(Get-Location)"
     
 }
 function configure_k8s() {
     ######################################################################################################################
     # Step 5 : Configure Kubernetes Infrastructure
-    $msg = "Configure Kubernetes Infrastructure"
-    Write-Host "$('#' * 5) Step5 $($MyInvocation.MyCommand.Name) $('#' * 10) $(Get-CurrentLine) $msg" -ForegroundColor Blue
+$msg = "Configure Kubernetes Infrastructure"
+Write-Host "$('#' * 5) Step5 $($MyInvocation.MyCommand.Name) $('#' * 10) $(Get-CurrentLine) $msg" -ForegroundColor Blue
     ######################################################################################################################
     # 0. Attach Container Registry to AKS
     # Write-Host "Attach Container Registry to AKS" -ForegroundColor Green
     # az aks update --name $deploymentResult.AksName --resource-group $deploymentResult.ResourceGroupName --attach-acr $deploymentResult.ContainerRegistryName
 
     Write-Host "Attach Container Registry to AKS" -ForegroundColor Green
+    
     $maxRetries = 10
     $retryCount = 0
     $delay = 30 # Delay in seconds
@@ -516,6 +536,7 @@ Write-Host "$(Get-CurrentLine) got aksResourceGroupName: $aksResourceGroupName"
 
     try {
         Write-Host "Getting the Kubernetes resource group..." -ForegroundColor Cyan
+        $aksResourceGroupName = $(az aks show --resource-group $deploymentResult.ResourceGroupName --name $deploymentResult.AksName --query nodeResourceGroup --output tsv)
 $rg = $deploymentResult.ResourceGroupName
 $aks = $deploymentResult.AksName
 Write-Host "$(Get-CurrentLine) az aks show --resource-group $rg --name $aks --query nodeResourceGroup --output tsv"
@@ -528,6 +549,7 @@ Write-Host "$(Get-CurrentLine) az aks show --resource-group $rg --name $aks --qu
         Write-Host $_.Exception.StackTrace -ForegroundColor Red
         exit 1
     }
+
 
     # 2.Connect to AKS cluster
     #az aks get-credentials --resource-group $deploymentResult.ResourceGroupName --name $deploymentResult.AksName --overwrite-existing
@@ -548,8 +570,8 @@ Write-Host "$(Get-CurrentLine) az aks show --resource-group $rg --name $aks --qu
     # 3. Create System Assigned Managed Identity for AKS
     ###################################################################
     # Get vmss Resource group Name
-    $rg = $deploymentResult.ResourceGroupName
-    $aks = $deploymentResult.AksName
+$rg = $deploymentResult.ResourceGroupName
+$aks = $deploymentResult.AksName
 Write-Host "$(Get-CurrentLine) az aks show --resource-group $rg --name $aks --query nodeResourceGroup --output tsv" -ForegroundColor DarkMagenta
     $vmssResourceGroupName = $(az aks show --resource-group $deploymentResult.ResourceGroupName --name $deploymentResult.AksName --query nodeResourceGroup --output tsv)
 Write-Host ($(Get-CurrentLine)) vmssResourceGroupName: $vmssResourceGroupName -ForegroundColor Cyan
@@ -730,6 +752,47 @@ function upgrade_k8s() {
     }
 }
 
+function depoy_k8s_certclusterissuer() {
+    $attempt = 0
+    $maxAttempts = 5
+    $interval = 30
+    Write-Host "7.2. Deploy ClusterIssuer in Kubernetes for SSL/TLS certificate" -ForegroundColor Cyan
+    while( -not ($(kubectl apply -f ../kubernetes/deploy.certclusterissuer.yaml) -or ($attempt -eq $maxAttempts))) {
+        ++$attempt
+        Write-Host "kubectl apply certclusterissuer, attempt $attempt of $maxAttempts. Waiting..." -ForegroundColor Yellow
+        Start-Sleep -Seconds $interval
+    }
+}
+function deploy_k8s_deployment() {
+    $attempt = 0
+    $maxAttempts = 5
+    $interval = 30
+    Write-Host "7.3. Deploy Deployment in Kubernetes" -ForegroundColor Cyan
+    while( -not ($(kubectl apply -f ../kubernetes/deploy.deployment.yaml) -or ($attempt -eq $maxAttempts))) {
+        Write-Host "kubectl apply deployment, attempt $(++$attempt) of $maxAttempts. Waiting..." -ForegroundColor Yellow
+        Start-Sleep -Seconds $interval
+    }
+}
+function deploy_k8s_service() {
+    $attempt = 0
+    $maxAttempts = 5
+    $interval = 30
+    Write-Host "7.4. Deploy Services in Kubernetes" -ForegroundColor Cyan
+    while( -not ($(kubectl apply -f ../kubernetes/deploy.service.yaml) -or ($attempt -eq $maxAttempts))) {
+        Write-Host "kubectl apply service, attempt $(++$attempt) of $maxAttempts. Waiting..." -ForegroundColor Yellow
+        Start-Sleep -Seconds $interval
+    }
+}
+function deploy_k8s_ingress() {
+    $attempt = 0
+    $maxAttempts = 5
+    $interval = 30
+    Write-Host "7.5. Deploy Ingress Controller in Kubernetes for external access" -ForegroundColor Cyan
+    while( -not ($(kubectl apply -f ../kubernetes/deploy.ingress.yaml) -or ($attempt -eq $maxAttempts))) {
+        Write-Host "kubectl apply certclusterissuer, attempt $(++$attempt) of $maxAttempts. Waiting..." -ForegroundColor Yellow
+        Start-Sleep -Seconds $interval
+    }
+}
 function configure_aks() {
     ########################################################################################################################################################
     # Step 7 : Configure AKS (deploy Cert Manager, Ingress Controller) and Deploy Images on the kubernetes cluster
@@ -749,21 +812,17 @@ Write-Host "$(Get-CurrentLine) $msg" -ForegroundColor Green
     # Wait for Cert-Manager to be ready
     Wait-ForCertManager
 
-    $msg = "7.2. Deploy ClusterIssuer in Kubernetes for SSL/TLS certificate"
-Write-Host "$(Get-CurrentLine) $msg" -ForegroundColor Blue
-    kubectl apply -f ../kubernetes/deploy.certclusterissuer.yaml
+    # 7.2. Deploy ClusterIssuer in Kubernetes for SSL/TLS certificate
+    depoy_k8s_certclusterissuer
 
-    $msg = "7.3. Deploy Deployment in Kubernetes"
-Write-Host "$(Get-CurrentLine) $msg" -ForegroundColor Blue
-    kubectl apply -f ../kubernetes/deploy.deployment.yaml
+    # 7.3. Deploy Deployment in Kubernetes
+    deploy_k8s_deployment
 
-    $msg = "7.4. Deploy Services in Kubernetes"
-Write-Host "$(Get-CurrentLine) $msg" -ForegroundColor Blue
-    kubectl apply -f ../kubernetes/deploy.service.yaml
+    # 7.4. Deploy Services in Kubernetes
+    deploy_k8s_service
 
-    $msg = "7.5. Deploy Ingress Controller in Kubernetes for external access"
-Write-Host "$(Get-CurrentLine) $msg" -ForegroundColor Blue
-    kubectl apply -f ../kubernetes/deploy.ingress.yaml
+    # 7.5. Deploy Ingress Controller in Kubernetes for external access
+    deploy_k8s_ingress
 
 }
 function closing_remarks() {
@@ -786,40 +845,44 @@ function closing_remarks() {
     Write-Host $messageString -ForegroundColor Yellow
 }
 
-if ( -not ($subscriptionID -and $location -and $email -and $ipRange)) {
-  Write-Error "Need subscriptionID, location, email, ipRange"
-  throw $_
+function persist_local($json) {
+      # SAVE JSON FOR LATER
+      $prefix += $deploymentResult.resourceprefix
+      $filePath = "scratch/deploymentResult$prefix.json"
+      Set-Content -Path $filePath -Value $json
+Write-Host "JSON object @ $filePath" -ForegroundColor Green
 }
+
+$prefix = "."
+$LOG="~/log/deployAzureResources.$(Get-Date -Format 'yyyyMMdd').log"
+$STAMP = $(Get-Date -Format "yyyyMMdd_T_hhmmss")
+$msg = ""
+$prefix += "sedx7"
+$filePath = "scratch/deploymentResult$prefix.json"
+Start-Transcript -Path $LOG -Append -NoClobber
+Write-Host "***** START $('*' * 30) ($(Get-CurrentLine)) $msg" -ForegroundColor Green
+
 ###########################################################
 # main()
 ###########################################################
-$LOG="~/log/deployAzureResources.$(Get-Date -Format 'yyyyMMdd').log"
+if ( -not ($subscriptionID -and $location -and $email -and $ipRange)) {
+  Write-Error "Need subscriptionID, location, email, ipRange"
+  exit 1
+}
 $CWD = $(Get-Location)
 #####
-$STAMP = $(Get-Date -Format "yyyyMMdd_T_hhmmss")
-Start-Transcript -Path $LOG -Append -NoClobber
-$msg = $null
-Write-Host "***** START $('*' * 30) ($(Get-CurrentLine)) $msg" -ForegroundColor Green
-
 $deploymentResult = [DeploymentResult]::new()
-$prefix = $null
-$json = $null
-$filePath = ""
+$is_testing = $false
+$iac_dir = 'bicep'
+if($is_testing) {
+    $iac_dir += '-test'
+}
 
-# $prefix = "yp4jo"
-$filePath = "deploymentResult.$prefix.json"
 try {
+    Write-Host "Script start $(Get-Date -Format 'yyyyMMdd_T_hhmmss')"
     If ( -not (Test-Path -Path $filePath)) {
-      # Step1
-      $json = deploy_main_services
-      $jsonObject = $json | ConvertFrom-Json
-      $deploymentResult.MapResult($jsonObject)
-
-      # SAVE JSON FOR LATER
-      $prefix = $deploymentResult.resourceprefix
-      $filePath = "deploymentResult.$prefix.json"
-      Set-Content -Path $filePath -Value $json
-Write-Host "JSON object @ $filePath"
+    # Step1
+      deploy_main_services
     }
     # READ THE JSON CONTENTS FROM FILE
     $json = Get-Content -Path $filePath -Raw
@@ -854,6 +917,6 @@ Write-Host "JSON object @ $filePath"
     Write-Host $_.InvocationInfo.PositionMessage -ForegroundColor Red
     Write-Host $_.ScriptStackTrace -ForegroundColor Red
 } finally {
+  Write-Host "Script complete $(Get-Date -Format 'yyyyMMdd_T_hhmmss')"
   Stop-Transcript
 }
-
