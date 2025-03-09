@@ -3,19 +3,14 @@
 
 targetScope = 'subscription'
 
-var prefix = 'xxxxx'
-param is_new bool = true
-var resourceprefix = is_new ? padLeft(take(uniqueString(deployment().name), 5), 5, '0') : prefix
-
-// var resourceprefix = padLeft(take(uniqueString(deployment().name), 5), 5, '0')
-// var resourceprefix = 'xxxxx'
+param prefix string
+var resourceprefix = length(prefix) < 5 ? padLeft(take(uniqueString(deployment().name), 5), 5, '0') : prefix
 
 // Create a resource group
 resource gs_resourcegroup 'Microsoft.Resources/resourceGroups@2021-04-01' = {
   name: 'rg-esgdocanalysis${resourceprefix}'
   location: deployment().location
 }
-//output gs_resourcegroup_name string = gs_resourcegroup.name
 
 param aksVersion string = '1.30.7'
 // /*
@@ -219,13 +214,11 @@ module gs_appinsights 'modules/azureappingisht.bicep' = {
     location: deployment().location
   }
 }
-//output gs_appinsights_name string = gs_appinsights.outputs.appInsightsName
-//output gs_appinsights_instrumentationkey string = gs_appinsights.outputs.instrumentationKey
 // */
 
 // ORIGINAL  ORDERING
 // return all resource names as a output
-output gs_resourcegroup_name string = 'rg-esgdocanalysis${resourceprefix}'
+output gs_resourcegroup_name string = gs_resourcegroup.name
 output gs_storageaccount_name string = gs_storageaccount.outputs.storageAccountName
 output gs_azsearch_name string = gs_azsearch.outputs.searchServiceName
 output gs_logicapp_docregistprocesswatcher_name string = gs_logicapp_docregistprocesswatcher.outputs.logicAppName

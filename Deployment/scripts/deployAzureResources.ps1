@@ -37,6 +37,7 @@ function Get-CurrentLine() {
 function LoginAzure([string]$subscriptionID) {
     Write-Host "$('#' * 10) $(Get-CurrentLine)::$($MyInvocation.MyCommand.Name)" -ForegroundColor Blue
     try {
+        Write-Host "*** TESTING DEPLOYMENT *** AUTO AZURE LOGIN " -ForegroundColor DarkRed
         # Write-Host "Log in to Azure.....`r`n" -ForegroundColor Yellow
         # az login -t $env:AZTENANT
         # az account set --subscription $subscriptionID
@@ -72,9 +73,8 @@ function DeployAzureResources([string]$location) {
         # }
         Write-Host "Deployment resource availabilities have been evaluated successfully." -ForegroundColor Green
         Write-Host "$(Get-CurrentLine) Staring subscription Deployment: $subscriptionDeployment`r`n" -ForegroundColor Yellow
-         ###  --parameters @bicep/main_services.json --parameters is_new=true
-        $deployment_output = az deployment sub create --template-file ../$iac_dir/main_services.bicep -l $location -n "$subscriptionDeployment"
-Write-Host "$(Get-CurrentLine) az deployment sub create --template-file ../bicep/main_services.bicep -l $location -n $subscriptionDeployment" -ForegroundColor DarkMagenta
+Write-Host "$(Get-CurrentLine) az deployment sub create --parameters @../$iac_dir/main_services.parameters.json --template-file ../$iac_dir/main_services.bicep -l $location -n $subscriptionDeployment" -ForegroundColor DarkMagenta
+        $deployment_output = az deployment sub create --parameters "@../$iac_dir/main_services.parameters.json" --template-file ../$iac_dir/main_services.bicep -l $location -n "$subscriptionDeployment"
 Write-Host "$(Get-CurrentLine) `$deployment_output is $deployment_output"
 
         $joinedString = $deployment_output -join ""
@@ -283,8 +283,7 @@ function deploy_main_services() {
     ###############################################################
   
 Write-Host "$(Get-CurrentLine) `$deploymentResult isa $($deploymentResult.GetType())"
-    Write-Host "*** TESTING DEPLOYMENT *** NO AZURE LOGIN " -ForegroundColor DarkRed
-    # LoginAzure($subscriptionID)
+    LoginAzure($subscriptionID)
     $json = $(az account show --query "{Subscription:name,SubscriptionID:id,Type:user.type,User:user.name,Tenant:tenantId}" -o json)
     Write-Host "$($json | ConvertFrom-Json | ConvertTo-Json)" -ForegroundColor Green
     # Deploy Azure Resources
@@ -433,16 +432,18 @@ Write-Host "$('#' * 5) Step4 $($MyInvocation.MyCommand.Name) $('#' * 10) $(Get-C
     # 2. Build and push the images to Azure Container Registry
     #  2-1. Build and push the AI Service container image to  Azure Container Registry
     $acrAIServiceTag = "$($deploymentResult.ContainerRegistryName).azurecr.io/$acrNamespace/aiservice"
-Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrAIServiceTag" -ForegroundColor DarkRed 
-    # docker build ../../Services/src/esg-ai-doc-analysis/. --no-cache -t $acrAIServiceTag
-# Write-Host "*** TESTING DEPLOYMENT *** NO docker push $acrAIServiceTag" -ForegroundColor DarkRed 
+Write-Host "*** TESTING DEPLOYMENT *** TAGGING IMAGE, NO docker build -t $acrAIServiceTag" -ForegroundColor DarkRed
+docker tag aiservice $acrAIServiceTag
+        # docker build ../../Services/src/esg-ai-doc-analysis/. --no-cache -t $acrAIServiceTag
+# Write-Host "*** TESTING DEPLOYMENT *** NO docker push $acrAIServiceTag" -ForegroundColor DarkRed
     docker push $acrAIServiceTag
 
     #  2-2. Build and push the Kernel Memory Service container image to Azure Container Registry
     $acrKernelMemoryTag = "$($deploymentResult.ContainerRegistryName).azurecr.io/$acrNamespace/kernelmemory"
-Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrKernelMemoryTag" -ForegroundColor DarkRed 
-    # docker build ../../Services/src/kernel-memory/. --no-cache -t $acrKernelMemoryTag
-# Write-Host "*** TESTING DEPLOYMENT *** NO docker push $acrKernelMemoryTag" -ForegroundColor DarkRed 
+Write-Host "*** TESTING DEPLOYMENT *** TAGGING IMAGE, NO docker build -t $acrKernelMemoryTag" -ForegroundColor DarkRed
+docker tag kernelmemory $acrKernelMemoryTag
+        # docker build ../../Services/src/kernel-memory/. --no-cache -t $acrKernelMemoryTag
+# Write-Host "*** TESTING DEPLOYMENT *** NO docker push $acrKernelMemoryTag" -ForegroundColor DarkRed
     docker push $acrKernelMemoryTag
 
 #### DEBUG CODE ####
@@ -450,14 +451,14 @@ Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrKernelMemoryTag" -
 #     $acrAIServiceTag = "$($deploymentResult.ContainerRegistryName).azurecr.io/$acrNamespace/aiservice"    
 # Set-Location -Path "../../Services/src/esg-ai-doc-analysis/"
 # Write-Host ($(Get-CurrentLine)) "Current Path is $(Get-Location)"
-#     # Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrAIServiceTag" -ForegroundColor DarkRed 
+#     # Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrAIServiceTag" -ForegroundColor DarkRed
 #     $docker = "docker build -t $acrAIServiceTag ."
 # Write-Host ($(Get-CurrentLine)) running: $docker
 #     Invoke-Expression $docker
 # Write-Host ($(Get-CurrentLine)) "pushing $acrAIServiceTag" -ForegroundColor Blue
 #     $docker = "docker push $acrAIServiceTag"
 # Write-Host ($(Get-CurrentLine)) running: $docker
-#     # Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrAIServiceTag" -ForegroundColor DarkRed 
+#     # Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrAIServiceTag" -ForegroundColor DarkRed
 #     Invoke-Expression $docker
 # Write-Host ($(Get-CurrentLine)) "$acrAIServiceTag pushed" -ForegroundColor Green
 #     Set-Location -Path $CWD
@@ -467,14 +468,14 @@ Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrKernelMemoryTag" -
 #     $acrKernelMemoryTag = "$($deploymentResult.ContainerRegistryName).azurecr.io/$acrNamespace/kernelmemory"
 # Set-Location -Path "../../Services/src/kernel-memory/"
 # Write-Host ($(Get-CurrentLine)) "Current Path is $(Get-Location)"
-#     # Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrKernelMemoryTag" -ForegroundColor DarkRed 
+#     # Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrKernelMemoryTag" -ForegroundColor DarkRed
 #     $docker = "docker build -t $acrKernelMemoryTag ."
 # Write-Host ($(Get-CurrentLine)) running: $docker
 #     Invoke-Expression $docker
 # Write-Host ($(Get-CurrentLine)) "pushing $acrKernelMemoryTag" -ForegroundColor Blue
 #     $docker = "docker push $acrKernelMemoryTag"
 # Write-Host ($(Get-CurrentLine)) running: $docker
-# #     Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrAIServiceTag" -ForegroundColor DarkRed 
+# #     Write-Host "*** TESTING DEPLOYMENT *** NO docker build -t $acrAIServiceTag" -ForegroundColor DarkRed
 #     Invoke-Expression $docker
 # Write-Host ($(Get-CurrentLine)) "$acrKernelMemoryTag pushed" -ForegroundColor Green
 #     Set-Location -Path $CWD
@@ -853,11 +854,11 @@ function persist_local($json) {
 Write-Host "JSON object @ $filePath" -ForegroundColor Green
 }
 
-$prefix = "."
 $LOG="~/log/deployAzureResources.$(Get-Date -Format 'yyyyMMdd').log"
 $STAMP = $(Get-Date -Format "yyyyMMdd_T_hhmmss")
 $msg = ""
-$prefix += "sedx7"
+$prefix = "."
+$prefix += ""
 $filePath = "scratch/deploymentResult$prefix.json"
 Start-Transcript -Path $LOG -Append -NoClobber
 Write-Host "***** START $('*' * 30) ($(Get-CurrentLine)) $msg" -ForegroundColor Green
@@ -884,11 +885,11 @@ try {
     # Step1
       deploy_main_services
     }
-    # READ THE JSON CONTENTS FROM FILE
-    $json = Get-Content -Path $filePath -Raw
-    $jsonObject = $json | ConvertFrom-Json
-    $deploymentResult.MapResult($jsonObject)
-
+    else { # READ THE JSON CONTENTS FROM FILE
+        $json = Get-Content -Path $filePath -Raw
+        $jsonObject = $json | ConvertFrom-Json
+        $deploymentResult.MapResult($jsonObject)
+    }
     # Step2
     get_service_info
 
