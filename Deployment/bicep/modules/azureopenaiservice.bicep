@@ -2,6 +2,7 @@
 // Licensed under the MIT license.
 
 param location string = resourceGroup().location
+param appname string
 param prefix string
 
 param obj_model_deployment_1 object = {
@@ -28,7 +29,7 @@ param obj_model_deployment_3 object = {
 
 
 resource openAIService 'Microsoft.CognitiveServices/accounts@2024-10-01' = {
-  name: 'openaiservice-esgdocanalysis${prefix}'
+  name: 'openaiservice${appname}${prefix}'
   location: location
   kind: 'OpenAI'
   sku: {
@@ -45,7 +46,7 @@ output oopenAIServiceLocation string = openAIService.location
 
 resource model_deployment_1 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: openAIService
-  name: '${obj_model_deployment_1.name}${prefix}'
+  name: obj_model_deployment_1.name
   sku: {
     name: 'Standard'
     capacity: obj_model_deployment_1.capacity
@@ -60,7 +61,7 @@ resource model_deployment_1 'Microsoft.CognitiveServices/accounts/deployments@20
 }
 resource model_deployment_2 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: openAIService
-  name: '${obj_model_deployment_2.name}${prefix}'
+  name: obj_model_deployment_2.name
   sku: {
     name: 'Standard'
     capacity: obj_model_deployment_2.capacity
@@ -78,7 +79,7 @@ resource model_deployment_2 'Microsoft.CognitiveServices/accounts/deployments@20
 }
 resource model_deployment_3 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: openAIService
-  name: '${obj_model_deployment_3.name}${prefix}'
+  name: obj_model_deployment_3.name
   sku: {
     name: 'Standard'
     capacity: obj_model_deployment_3.capacity

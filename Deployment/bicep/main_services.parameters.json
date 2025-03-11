@@ -4,6 +4,12 @@
     "parameters": {
         "prefix": {
             "value": ""
+        },
+        "appname": {
+            "value": ""
+        },
+        "aksVersion": {
+            "value": ""
         }
     }
 }

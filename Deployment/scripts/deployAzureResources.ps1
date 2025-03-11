@@ -820,28 +820,27 @@ function validate_parms() {
 }
 
 function persist_local($json) {
-      # SAVE JSON FOR LATER
-      $prefix += $deploymentResult.resourceprefix
-      $filePath = "scratch/deploymentResult$prefix.json"
-      Set-Content -Path $filePath -Value $json
+    # SAVE JSON FOR LATER
+    $prefix += $deploymentResult.resourceprefix
+    $filePath = "$LOGDIR/deploymentResult$prefix.json"
+    Set-Content -Path $filePath -Value $json
 Write-Host "JSON object @ $filePath" -ForegroundColor Green
 }
 
-$LOG="~/log/deployAzureResources.$(Get-Date -Format 'yyyyMMdd').log"
+$TIMESTAMP = $(Get-Date -Format "yyyyMMdd_T_hhmmss")
+$LOGDIR="$HOME/log/$TIMESTAMP"
+New-Item -Path "$LOGDIR" -ItemType Directory
+$LOG="$LOGDIR/deployAzureResources.log"
 $msg = ""
 $prefix = ""
 $prefix = ".$prefix"
-$filePath = "scratch/deploymentResult$prefix.json"
+$filePath = "$LOGDIR/deploymentResult$prefix.json"
 Start-Transcript -Path $LOG -Append -NoClobber
 Write-Host "***** START $('*' * 30) ($(Get-CurrentLine)) $msg" -ForegroundColor Green
 
 ###########################################################
 # main()
 ###########################################################
-if ( -not ($subscriptionID -and $location -and $email -and $ipRange)) {
-  Write-Error "Need subscriptionID, location, email, ipRange"
-  exit 1
-}
 $STAMP = $(Get-Date -Format "yyyyMMdd_T_hhmmss")
 $CWD = $(Get-Location)
 #####
@@ -899,5 +898,7 @@ try {
     Write-Host $_.ScriptStackTrace -ForegroundColor Red
 } finally {
   Write-Host "Script complete $(Get-Date -Format 'yyyyMMdd_T_hhmmss')"
-  Stop-Transcript
+  Stop-Transcript && Write-Host "Transcript stopped"
 }
+
+Write-Host "done"
