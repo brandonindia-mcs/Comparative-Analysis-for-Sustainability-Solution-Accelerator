@@ -72,7 +72,10 @@ function DeployAzureResources([string]$location) {
             Write-Host $whatIfResult -ForegroundColor Red
             exit 1            
         }
+Write-Host "*** TESTING DEPLOYMENT *** printing what if result:" -ForegroundColor DarkRed
+Write-Host $whatIfResult
 $whatIfResult|Format-List
+# throw [System.Exception]"What If Exception"
         Write-Host "Deployment resource availabilities have been evaluated successfully." -ForegroundColor Green
         Write-Host "$(Get-CurrentLine) Staring subscription Deployment: $subscriptionDeployment`r`n" -ForegroundColor Yellow
 Write-Host "$(Get-CurrentLine) az deployment sub create --parameters @../$iac_dir/main_services.parameters.json --template-file ../$iac_dir/main_services.bicep -l $location -n $subscriptionDeployment" -ForegroundColor DarkMagenta
@@ -83,6 +86,9 @@ Write-Host "$(Get-CurrentLine) `$deployment_output is $deployment_output"
         $jsonString = ConvertFrom-Json $joinedString
         # Map the deployment result to DeploymentResult object
         $deploymentResult.MapResult($jsonString)
+Write-Host "*** TESTING DEPLOYMENT *** persist_local(`$deployment_output)" -ForegroundColor DarkRed
+persist_local($deployment_output)
+
         return $jsonString
     } catch {
         Write-Host "$($MyInvocation.MyCommand.Name):An error occurred during the deployment process:" -ForegroundColor Red
@@ -822,8 +828,8 @@ function validate_parms() {
 
 function persist_local($json) {
     # SAVE JSON FOR LATER
-    $prefix += $deploymentResult.resourceprefix
-    $filePath = "$LOGDIR/deploymentResult$prefix.json"
+    $prefix = $deploymentResult.resourceprefix
+    $filePath = "$LOGDIR/deploymentResult.$prefix.json"
     Set-Content -Path $filePath -Value $json
 Write-Host "JSON object @ $filePath" -ForegroundColor Green
 }
@@ -882,9 +888,6 @@ try {
     # Step5
     configure_k8s
     upgrade_k8s
-
-    # Step6
-    ### REMOVED
 
     # Step7
     configure_aks
