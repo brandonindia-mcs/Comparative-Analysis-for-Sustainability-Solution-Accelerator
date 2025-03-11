@@ -56,11 +56,12 @@ function DeployAzureResources([string]$location) {
     Write-Host "$('#' * 10) $(Get-CurrentLine)::$($MyInvocation.MyCommand.Name)" -ForegroundColor Blue
     try {
         # Generate a random number between 0 and 99999
-        $randomNumber = Get-Random -Minimum 0 -Maximum 99999
-        # Pad the number with leading zeros to ensure it is 5 digits long
-        $randomNumberPadded = $randomNumber.ToString("D5")
+        $randomNumber = Get-Random -Minimum 0 -Maximum 999999
+        # Pad the number with leading zeros to ensure it is 6 digits long
+        $randomNumberPadded = $randomNumber.ToString("D6")
         # Make deployment name unique by appending random number
         $subscriptionDeployment = $STAMP+"-"+$randomNumberPadded+"-ESG_Document_Analysis_Deployment"
+        $subscriptionDeployment = "sustainaccel"+"isdeagi"+$randomNumberPadded
 
         # Perform a what-if deployment to preview changes
         # Write-Host "*** TESTING DEPLOYMENT *** NO WHAT-IF" -ForegroundColor DarkRed
