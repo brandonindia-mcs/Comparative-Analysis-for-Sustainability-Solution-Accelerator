@@ -3,9 +3,7 @@
 
 param aksVersion string
 param aksAgentVMSize string = 'Standard_D4ds_v5'
-param aksAgentPoolCount int = 2
-param aksAppVMSize string = 'Standard_D4ds_v5'
-param aksAppPoolCount int = 2
+param aksAgentPoolCount int = 3
 @description('Provide a globally unique name of your Azure kubernetes Cluster')
 param aksName string = 'aks-'
 

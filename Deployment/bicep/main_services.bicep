@@ -21,9 +21,7 @@ module gs_aks 'modules/azurekubernetesservice.bicep' = {
     aksName: 'aks-esgdocanalysis${resourceprefix}'
     aksVersion:aksVersion
     aksAgentVMSize:'Standard_D2ds_v5'
-    aksAgentPoolCount:2
-    aksAppVMSize:'Standard_D2ds_v5'
-    aksAppPoolCount:2
+    aksAgentPoolCount:3
     location: deployment().location
   }
 }
