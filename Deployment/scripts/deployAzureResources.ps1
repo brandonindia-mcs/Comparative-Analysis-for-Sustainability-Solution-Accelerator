@@ -36,19 +36,20 @@ param(
     [string]$appname
 )
 function Get-CurrentLine() {
-    # $s = $(Get-Date -Format "yyyyMMddThhmmss")
+    # $s = $(Get-Date -Format "yyyyMMddTHHmmss")
     $s = $STAMP
     $n = $MyInvocation.ScriptLineNumber
     $f = Split-Path -Path $MyInvocation.ScriptName -Leaf
     return "${s}:${f}(${n})"
 }
 function LoginAzure([string]$subscriptionID) {
+    Write-Host "$('#' * 10) $(Get-CurrentLine)::$($MyInvocation.MyCommand.Name)" -ForegroundColor Blue
     try {
-        # Write-Host "*** TESTING DEPLOYMENT *** AUTO AZURE LOGIN " -ForegroundColor DarkRed
-        Write-Host "Log in to Azure.....`r`n" -ForegroundColor Yellow
-        az login
-        az account set --subscription $subscriptionID
-        Write-Host "Switched subscription to '$subscriptionID' `r`n" -ForegroundColor Yellow
+        Write-Host "*** TESTING DEPLOYMENT *** AUTO AZURE LOGIN" -ForegroundColor DarkRed
+        # Write-Host "Log in to Azure.....`r`n" -ForegroundColor Yellow
+        # az login -t $env:AZTENANT
+        # az account set --subscription $subscriptionID
+        # Write-Host "Switched subscription to '$subscriptionID' `r`n" -ForegroundColor Yellow
         return
     } catch {
         Write-Host "$($MyInvocation.MyCommand.Name): no login" -ForegroundColor Red
@@ -80,6 +81,9 @@ Write-Host ($whatIfResult|Format-List|Out-String)
         $jsonString = ConvertFrom-Json $joinedString
         # Map the deployment result to DeploymentResult object
         $deploymentResult.MapResult($jsonString)
+Write-Host "*** TESTING DEPLOYMENT *** persist_local(`$deployment_output)" -ForegroundColor DarkRed
+persist_local($deployment_output)
+
         return $jsonString
     } catch {
         Write-Host "$($MyInvocation.MyCommand.Name):An error occurred during the deployment process:" -ForegroundColor Red
@@ -237,7 +241,94 @@ class DeploymentResult {
         $this.resourceprefix = $jsonString.properties.outputs.resourceprefix.value
     }
 }
+function Write-ParameterJson {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$prefix,
 
+        [Parameter(Mandatory=$true)]
+        [string]$appname,
+
+        [Parameter(Mandatory=$true)]
+        [string]$aks_version,
+
+        [Parameter(Mandatory=$true)]
+        [string]$gpt4,
+
+        [Parameter(Mandatory=$true)]
+        [string]$gpt4_version,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange("Positive")]
+        [int]$gpt4_capacity=1,
+
+        [Parameter(Mandatory=$true)]
+        [string]$gpt4_32k,
+
+        [Parameter(Mandatory=$true)]
+        [string]$gpt4_32k_version,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange("Positive")]
+        [int]$gpt4_32k_capacity=1,
+
+        [Parameter(Mandatory=$true)]
+        [string]$textembedding,
+
+        [Parameter(Mandatory=$true)]
+        [string]$textembedding_version,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange("Positive")]
+        [int]$textembedding_capacity=1,
+
+        [string]$filePath = "../$iac_dir/main_services.parameters.json"
+    )
+    
+    $jsonContent = @"
+{
+    "`$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "resourceprefix": {
+            "value": "$prefix"
+        },
+        "appname": {
+            "value": "$appname"
+        },
+        "aksVersion": {
+            "value": "$aks_version"
+        },
+        "gpt4":{
+            "value": {
+                "name": "$gpt4",
+                "version": "$gpt4_version",
+                "raiPolicyName": "",
+                "capacity": $gpt4_capacity
+            }
+        },
+        "gpt4_32k":{
+            "value": {
+                "name": "$gpt4_32k",
+                "version": "$gpt4_32k_version",
+                "raiPolicyName": "",
+                "capacity": $gpt4_32k_capacity
+            }
+        },
+        "textembedding":{
+            "value": {
+                "name": "$textembedding",
+                "version": "$textembedding_version",
+                "raiPolicyName": "",
+                "capacity": $textembedding_capacity
+            }
+        }
+    }
+}
+"@
+    Set-Content -Path $filePath -Value $jsonContent
+    Write-Host parameters writter $filePath
+}
 function Get-LogicAppTriggerUrl {
     param (
         [string]$subscriptionId,
@@ -424,7 +515,7 @@ function configure_k8s() {
     # Write-Host "Attach Container Registry to AKS" -ForegroundColor Green
     # az aks update --name $deploymentResult.AksName --resource-group $deploymentResult.ResourceGroupName --attach-acr $deploymentResult.ContainerRegistryName
 
-    Write-Host "Attach Container Registry to AKS" -ForegroundColor Green
+    Write-Host "Attach Container Registry to AKS" -ForegroundColor Blue
     
     $maxRetries = 10
     $retryCount = 0
@@ -434,7 +525,7 @@ function configure_k8s() {
         try {
             # Attempt to update the AKS cluster
             az aks update --name $deploymentResult.AksName --resource-group $deploymentResult.ResourceGroupName --attach-acr $deploymentResult.ContainerRegistryName
-            Write-Host "AKS cluster updated successfully."
+            Write-Host "AKS cluster updated successfully." -ForegroundColor Green
             break
         } catch {
             $errorMessage = $_.Exception.Message
@@ -725,6 +816,10 @@ function get_fqdn {
     $node_ip=$(kubectl get svc -n app-routing-system -o jsonpath="{.items[?(@.metadata.name=='$($node)')].status.loadBalancer.ingress[*].ip}")
     $node_ip_name=$(az network public-ip list --query "[?ipAddress=='$node_ip'].name" --output tsv)
     $domain_name=$(az network public-ip show --resource-group $node_resource_group --name $node_ip_name --query "dnsSettings.fqdn" --output tsv)
+    Write-Host "node_resource_group=`$(az aks show --resource-group $($deploymentResult.ResourceGroupName) --name $($deploymentResult.AksName) --query nodeResourceGroup --output tsv)"
+    Write-Host "node_ip=`$(kubectl get svc -n app-routing-system -o jsonpath=`"{.items[?(@.metadata.name=='$($node)')].status.loadBalancer.ingress[*].ip}`")"
+    Write-Host "node_ip_name=`$(az network public-ip list --query `"[?ipAddress=='$node_ip'].name`" --output tsv)"
+    Write-Host "domain_name=`$(az network public-ip show --resource-group $node_resource_group --name $node_ip_name --query `"dnsSettings.fqdn`" --output tsv)"
     return $domain_name
 }
 
@@ -755,6 +850,33 @@ function validate_parms() {
     }
     Write-Host "parameters found!" -ForegroundColor Green
 }
+
+function persist_local($json) {
+    # SAVE JSON FOR LATER
+    # $appname = $deploymentResult.appname
+    # $prefix = $deploymentResult.resourceprefix
+    $appname = $appname
+    $prefix = $prefix
+    $app = $deploymentResult.appname
+    $pfx = $deploymentResult.resourceprefix
+    if ([string]::IsNullOrEmpty($app)) {
+        Write-Host ($deploymentResult|Format-List|Out-String) -ForegroundColor Red
+        throw [System.Exception]"no appname from deploymentResult"
+    }
+    if ([string]::IsNullOrEmpty($pfx)) {
+        Write-Host ($deploymentResult|Format-List|Out-String) -ForegroundColor Red
+        throw [System.Exception]"no resourceprefix from deploymentResult"
+    }
+    Write-Host ($deploymentResult|Format-List|Out-String) -ForegroundColor Green
+    New-Item -Path "$LOGDIR/$app-$pfx" -ItemType Directory -Force
+    $RESULTS_JSON = "deploymentResult-$app-$pfx.json"
+    Set-Content -Path "$LOGDIR/$app-$pfx/$RESULTS_JSON" -Value $json
+    Write-Host "results json @ $LOGDIR/$app-$pfx/$RESULTS_JSON" -ForegroundColor Green
+
+    Set-Content -Path "$LOGDIR/$TIMESTAMP-$appname-$prefix/$RESULTS_JSON" -Value $json
+    Write-Host "results json @ $LOGDIR/$TIMESTAMP-$appname-$prefix/$RESULTS_JSON" -ForegroundColor Green
+}
+
 ###########################################################
 # main()
 ###########################################################
@@ -768,6 +890,17 @@ if($is_testing) {
     $iac_dir += '-test'
 }
 
+Write-Host "*** TESTING DEPLOYMENT *** DEBUG LOGGING" -ForegroundColor DarkRed
+$TIMESTAMP = $(Get-Date -Format "yyyyMMdd_T_HHmmss")
+$LOGDIR="$HOME/log"
+New-Item -Path "$LOGDIR" -ItemType Directory -ErrorAction SilentlyContinue
+$LOG="$LOGDIR/$TIMESTAMP-$appname-$prefix/deployAzureResources-$appname-$prefix.log"
+$msg = ""
+$RESULTS_OUT = "$LOGDIR/$appname-$prefix/deploymentResult-$appname-$prefix.json"
+Start-Transcript -Path $LOG -Append -NoClobber
+Write-Host "$(date)" -ForegroundColor Blue
+Write-Host "***** START $('*' * 30) ($(Get-CurrentLine)) $msg" -ForegroundColor Green
+
 try {
     Write-Host "Script start $(Get-Date -Format 'yyyyMMdd_T_HHmmss')"
     # Step1
@@ -778,8 +911,21 @@ try {
         throw [System.Exception]"NOLOGIN"
     }
     Write-Host "$($json | ConvertFrom-Json | ConvertTo-Json)" -ForegroundColor Green
+    
+    Write-ParameterJson -prefix "$prefix" -appname "$appname" -aks_version '1.30.11' `
+        -gpt4 'gpt-4o' -gpt4_version '2024-05-13' `
+        -gpt4_32k 'gpt-4-32k' -gpt4_32k_version '0613' `
+        -textembedding 'text-embedding-3-large' -textembedding_version '1' `
+        -gpt4_capacity 1 -gpt4_32k_capacity 1 -textembedding_capacity 1
+    Write-Host "looking for: $RESULTS_OUT" -ForegroundColor Yellow
+    If ( -not (Test-Path -Path $RESULTS_OUT)) {
     deploy_main_services
-
+    }
+    else { # READ THE JSON CONTENTS FROM FILE
+        $json = Get-Content -Path $RESULTS_OUT -Raw
+        $jsonObject = $json | ConvertFrom-Json
+        $deploymentResult.MapResult($jsonObject)
+    }
     # Step2
     get_service_info
 

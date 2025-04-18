@@ -3,7 +3,8 @@
 
 targetScope = 'subscription'
 
-var resourceprefix = padLeft(take(uniqueString(deployment().name), 5), 5, '0')
+@maxLength(8)
+param resourceprefix string = 'defltesg'
 param appname string = 'esgdocanalysis'
 
 param gpt4 object = {
