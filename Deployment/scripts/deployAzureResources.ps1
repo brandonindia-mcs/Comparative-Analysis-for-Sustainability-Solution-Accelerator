@@ -43,12 +43,13 @@ function Get-CurrentLine() {
     return "${s}:${f}(${n})"
 }
 function LoginAzure([string]$subscriptionID) {
+    Write-Host "$('#' * 10) $(Get-CurrentLine)::$($MyInvocation.MyCommand.Name)" -ForegroundColor Blue
     try {
-        # Write-Host "*** TESTING DEPLOYMENT *** AUTO AZURE LOGIN " -ForegroundColor DarkRed
-        Write-Host "Log in to Azure.....`r`n" -ForegroundColor Yellow
-        az login
-        az account set --subscription $subscriptionID
-        Write-Host "Switched subscription to '$subscriptionID' `r`n" -ForegroundColor Yellow
+        Write-Host "*** TESTING DEPLOYMENT *** AUTO AZURE LOGIN" -ForegroundColor DarkRed
+        # Write-Host "Log in to Azure.....`r`n" -ForegroundColor Yellow
+        # az login -t $env:AZTENANT
+        # az account set --subscription $subscriptionID
+        # Write-Host "Switched subscription to '$subscriptionID' `r`n" -ForegroundColor Yellow
         return
     } catch {
         Write-Host "$($MyInvocation.MyCommand.Name): no login" -ForegroundColor Red
@@ -80,6 +81,10 @@ Write-Host ($whatIfResult|Format-List|Out-String)
         $jsonString = ConvertFrom-Json $joinedString
         # Map the deployment result to DeploymentResult object
         $deploymentResult.MapResult($jsonString)
+Write-Host "*** TESTING DEPLOYMENT *** persist_local(`$deployment_output)" -ForegroundColor DarkRed
+persist_local($deployment_output)
+# if(!$is_testing) { persist_local($deployment_output) }
+
         return $jsonString
     } catch {
         Write-Host "$($MyInvocation.MyCommand.Name):An error occurred during the deployment process:" -ForegroundColor Red
@@ -156,6 +161,7 @@ class DeploymentResult {
     [string]$AzAppInsightsInstrumentationKey
     [string]$appname
     [string]$resourceprefix
+    [string]$NodeResourceGroup
 
     DeploymentResult() {
         # Resource Group
@@ -204,6 +210,7 @@ class DeploymentResult {
         # meta info
         $this.appname = ""
         $this.resourceprefix = ""
+        $this.NodeResourceGroup = "DEFAULT_NO_VALUE"
     }
 
     [void]MapResult([pscustomobject]$jsonString) {
@@ -238,6 +245,147 @@ class DeploymentResult {
     }
 }
 
+function Write-ParameterJson {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$prefix,
+
+        [Parameter(Mandatory=$true)]
+        [string]$appname,
+
+        [Parameter(Mandatory=$true)]
+        [string]$aks_version,
+
+        [Parameter(Mandatory=$true)]
+        [string]$gpt4,
+
+        [Parameter(Mandatory=$true)]
+        [string]$gpt4_version,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange("Positive")]
+        [int]$gpt4_capacity=1,
+
+        [Parameter(Mandatory=$true)]
+        [string]$gpt4_32k,
+
+        [Parameter(Mandatory=$true)]
+        [string]$gpt4_32k_version,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange("Positive")]
+        [int]$gpt4_32k_capacity=1,
+
+        [Parameter(Mandatory=$true)]
+        [string]$textembedding,
+
+        [Parameter(Mandatory=$true)]
+        [string]$textembedding_version,
+
+        [Parameter(Mandatory = $false)]
+        [ValidateRange("Positive")]
+        [int]$textembedding_capacity=1,
+
+        [string]$filePath = "../$iac_dir/main_services.parameters.json"
+    )
+    
+    $jsonContent = @"
+{
+    "`$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "resourceprefix": {
+            "value": "$prefix"
+        },
+        "appname": {
+            "value": "$appname"
+        },
+        "aksVersion": {
+            "value": "$aks_version"
+        },
+        "gpt4":{
+            "value": {
+                "name": "$gpt4",
+                "version": "$gpt4_version",
+                "raiPolicyName": "",
+                "capacity": $gpt4_capacity
+            }
+        },
+        "gpt4_32k":{
+            "value": {
+                "name": "$gpt4_32k",
+                "version": "$gpt4_32k_version",
+                "raiPolicyName": "",
+                "capacity": $gpt4_32k_capacity
+            }
+        },
+        "textembedding":{
+            "value": {
+                "name": "$textembedding",
+                "version": "$textembedding_version",
+                "raiPolicyName": "",
+                "capacity": $textembedding_capacity
+            }
+        }
+    }
+}
+"@
+    Set-Content -Path $filePath -Value $jsonContent
+    Write-Host parameters writter $filePath
+}
+
+function Write-ParameterJson-ApplicationGateway {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$prefix,
+
+        [Parameter(Mandatory=$true)]
+        [string]$appname,
+
+        [Parameter(Mandatory=$true)]
+        [string]$node_resource_group,
+
+        [Parameter(Mandatory=$true)]
+        [string]$vnet='aks-vnet-12767300',
+
+        [Parameter(Mandatory=$true)]
+        [string]$cidr='10.226.0.0/24',
+
+        [Parameter(Mandatory = $true)]
+        [string]$subnet='appgw-subnet',
+
+        [string]$filePath = "../$iac_dir/azureapplicationgateway.parameters.json"
+    )
+    
+    $jsonContent = @"
+{
+    "`$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "resourceprefix": {
+            "value": "$prefix"
+        },
+        "appname": {
+            "value": "$appname"
+        },
+        "node_resource_group": {
+            "value": "$node_resource_group"
+        },
+        "vnet":{
+            "value": "$vnet"
+        },
+        "cidr":{
+            "value": "$cidr"
+        },
+        "subnet":{
+            "value": "$subnet"
+        }
+    }
+}
+"@
+    Set-Content -Path $filePath -Value $jsonContent
+    Write-Host parameters writter $filePath
+}
 function Get-LogicAppTriggerUrl {
     param (
         [string]$subscriptionId,
@@ -305,7 +453,8 @@ function get_service_info() {
     $deploymentResult.AzSearchAdminKey = az search admin-key show --service-name $deploymentResult.AzSearchServiceName --resource-group $deploymentResult.ResourceGroupName --query "primaryKey" -o tsv
     # Get Azure Open AI Service API Key
     $deploymentResult.AzOpenAiServiceKey = az cognitiveservices account keys list --name $deploymentResult.AzOpenAiServiceName --resource-group $deploymentResult.ResourceGroupName --query "key1" -o tsv
-    
+    # Get Worker Node Resource Group
+    $deploymentResult.NodeResourceGroup = az aks show --resource-group $deploymentResult.ResourceGroupName --name $deploymentResult.AksName --query nodeResourceGroup --output tsv
 }
 function update_app_configs() {
     ######################################################################################################################
@@ -385,19 +534,17 @@ function build_push_container_images() {
     # 2. Build and push the images to Azure Container Registry
     #  2-1. Build and push the AI Service container image to  Azure Container Registry
     $acrAIServiceTag = "$($deploymentResult.ContainerRegistryName).azurecr.io/$acrNamespace/aiservice"
-# Write-Host "*** TESTING DEPLOYMENT *** NO DOCKER BUILD -t $acrAIServiceTag" -ForegroundColor DarkRed
-# docker tag aiservice $acrAIServiceTag
-    docker build ../../Services/src/esg-ai-doc-analysis/. --no-cache -t $acrAIServiceTag
-# Write-Host "*** TESTING DEPLOYMENT *** NO docker push $acrAIServiceTag" -ForegroundColor DarkRed
-    docker push $acrAIServiceTag
+Write-Host "*** TESTING DEPLOYMENT *** NO DOCKER BUILD -t $acrAIServiceTag" -ForegroundColor DarkRed
+    # docker build ../../Services/src/esg-ai-doc-analysis/. --no-cache -t $acrAIServiceTag
+Write-Host "*** TESTING DEPLOYMENT *** NO docker push $acrAIServiceTag" -ForegroundColor DarkRed
+    # docker push $acrAIServiceTag
 
     #  2-2. Build and push the Kernel Memory Service container image to Azure Container Registry
     $acrKernelMemoryTag = "$($deploymentResult.ContainerRegistryName).azurecr.io/$acrNamespace/kernelmemory"
-# Write-Host "*** TESTING DEPLOYMENT *** NO DOCKER BUILD -t $acrKernelMemoryTag" -ForegroundColor DarkRed
-# docker tag kernelmemory $acrKernelMemoryTag
-    docker build ../../Services/src/kernel-memory/. --no-cache -t $acrKernelMemoryTag
-# Write-Host "*** TESTING DEPLOYMENT *** NO docker push $acrKernelMemoryTag" -ForegroundColor DarkRed
-    docker push $acrKernelMemoryTag
+Write-Host "*** TESTING DEPLOYMENT *** NO DOCKER BUILD -t $acrKernelMemoryTag" -ForegroundColor DarkRed
+    # docker build ../../Services/src/kernel-memory/. --no-cache -t $acrKernelMemoryTag
+Write-Host "*** TESTING DEPLOYMENT *** NO docker push $acrKernelMemoryTag" -ForegroundColor DarkRed
+    # docker push $acrKernelMemoryTag
 }
 function enable_app_routing() {
     # 4.approuting enable and enable addons for http_application_routing
@@ -424,7 +571,7 @@ function configure_k8s() {
     # Write-Host "Attach Container Registry to AKS" -ForegroundColor Green
     # az aks update --name $deploymentResult.AksName --resource-group $deploymentResult.ResourceGroupName --attach-acr $deploymentResult.ContainerRegistryName
 
-    Write-Host "Attach Container Registry to AKS" -ForegroundColor Green
+    Write-Host "Attach Container Registry to AKS" -ForegroundColor Blue
     
     $maxRetries = 10
     $retryCount = 0
@@ -434,7 +581,7 @@ function configure_k8s() {
         try {
             # Attempt to update the AKS cluster
             az aks update --name $deploymentResult.AksName --resource-group $deploymentResult.ResourceGroupName --attach-acr $deploymentResult.ContainerRegistryName
-            Write-Host "AKS cluster updated successfully."
+            Write-Host "AKS cluster updated successfully." -ForegroundColor Green
             break
         } catch {
             $errorMessage = $_.Exception.Message
@@ -492,25 +639,25 @@ function configure_k8s() {
     ###################################################################
     # 3. Create System Assigned Managed Identity for AKS
     ###################################################################
-# Write-Host "*** TESTING DEPLOYMENT *** SKIPPING ROLE ASSIGNMENTS & IDENTITY FOR AKS" -ForegroundColor DarkRed
-    # Get vmss Resource group Name
-    $vmssResourceGroupName = $(az aks show --resource-group $deploymentResult.ResourceGroupName --name $deploymentResult.AksName --query nodeResourceGroup --output tsv)
-    # Get vmss Name
-    $vmssName = $(az vmss list --resource-group $vmssResourceGroupName --query "[0].name" --output tsv)
-    # Create System Assigned Managed Identity for AKS
-    $systemAssignedIdentity = $(az vmss identity assign --resource-group $vmssResourceGroupName --name $vmssName --query systemAssignedIdentity --output tsv)
+Write-Host "*** TESTING DEPLOYMENT *** SKIPPING ROLE ASSIGNMENTS & IDENTITY FOR AKS" -ForegroundColor DarkRed
+    # # Get vmss Resource group Name
+    # $vmssResourceGroupName = $(az aks show --resource-group $deploymentResult.ResourceGroupName --name $deploymentResult.AksName --query nodeResourceGroup --output tsv)
+    # # Get vmss Name
+    # $vmssName = $(az vmss list --resource-group $vmssResourceGroupName --query "[0].name" --output tsv)
+    # # Create System Assigned Managed Identity for AKS
+    # $systemAssignedIdentity = $(az vmss identity assign --resource-group $vmssResourceGroupName --name $vmssName --query systemAssignedIdentity --output tsv)
 
-    # Assign the role for aks system assigned managed identity to Azure blob Storage Data contributor role with the scope of the storage account
-    az role assignment create --role "Storage Blob Data Contributor" --assignee $systemAssignedIdentity --scope "/subscriptions/$subscriptionID/resourceGroups/$($deploymentResult.ResourceGroupName)/providers/Microsoft.Storage/storageAccounts/$($deploymentResult.StorageAccountName)"
+    # # Assign the role for aks system assigned managed identity to Azure blob Storage Data contributor role with the scope of the storage account
+    # az role assignment create --role "Storage Blob Data Contributor" --assignee $systemAssignedIdentity --scope "/subscriptions/$subscriptionID/resourceGroups/$($deploymentResult.ResourceGroupName)/providers/Microsoft.Storage/storageAccounts/$($deploymentResult.StorageAccountName)"
 
-    # Assigne the role for aks system assigned managed identity to Azure queue data contributor role with the scope of the storage account
-    az role assignment create --role "Storage Queue Data Contributor" --assignee $systemAssignedIdentity --scope "/subscriptions/$subscriptionID/resourceGroups/$($deploymentResult.ResourceGroupName)/providers/Microsoft.Storage/storageAccounts/$($deploymentResult.StorageAccountName)"
+    # # Assigne the role for aks system assigned managed identity to Azure queue data contributor role with the scope of the storage account
+    # az role assignment create --role "Storage Queue Data Contributor" --assignee $systemAssignedIdentity --scope "/subscriptions/$subscriptionID/resourceGroups/$($deploymentResult.ResourceGroupName)/providers/Microsoft.Storage/storageAccounts/$($deploymentResult.StorageAccountName)"
 
     # 3.Create namespace for AI Service
-# Write-Host "*** TESTING DEPLOYMENT *** SKIPPING NEW KUBE NAMESPACE" -ForegroundColor DarkRed
-    kubectl create namespace $kubenamepsace
-# Write-Host "*** TESTING DEPLOYMENT *** SKIPPING APP ROUTING" -ForegroundColor DarkRed
-    enable_app_routing
+Write-Host "*** TESTING DEPLOYMENT *** SKIPPING NEW KUBE NAMESPACE" -ForegroundColor DarkRed
+    # kubectl create namespace $kubenamepsace
+Write-Host "*** TESTING DEPLOYMENT *** SKIPPING APP ROUTING" -ForegroundColor DarkRed
+    # enable_app_routing
     
     
     # 5. Deploy nginx ingress public controller for dedicated public IP address
@@ -553,7 +700,6 @@ Write-Host "$(Get-CurrentLine) got aksResourceGroupName: $aksResourceGroupName"
     #  6-1. Get Az Network resource Name with the public IP address`
 $msg = "6.1. Get Az Network resource Name with the public IP address"
 Write-Host "$(Get-CurrentLine) $msg" -ForegroundColor Blue
-    Write-Host "Assign DNS Name to the public IP address" -ForegroundColor Green
     $publicIpName=$(az network public-ip list --query "[?ipAddress=='$externalIP'].name" --output tsv)
 Write-Host "$(Get-CurrentLine) got publicIpName: $publicIpName"
 
@@ -568,7 +714,7 @@ $msg = "6.3. Assign DNS Name to the public IP address"
 Write-Host "$(Get-CurrentLine) $msg" -ForegroundColor Blue
     az network public-ip update --resource-group $aksResourceGroupName --name $publicIpName --dns-name $dnsName
 
-    #  6-4. Get FQDN for the public IP address    
+    #  6-4. Get FQDN for the public IP address
 $msg = "6.4. Get FQDN for the public IP address"
 Write-Host "$(Get-CurrentLine) $msg" -ForegroundColor Blue
     $fqdn = az network public-ip show --resource-group $aksResourceGroupName --name $publicIpName --query "dnsSettings.fqdn" --output tsv
@@ -715,6 +861,32 @@ function configure_aks() {
     deploy_k8s_ingress
 
 }
+function configure_appgw() {
+    ########################################################################################################################################################
+    Write-Host "Step 8 : Build & Configure Application Gateway" -ForegroundColor Yellow
+    ########################################################################################################################################################
+        $vnet = az network vnet list -g $deploymentResult.NodeResourceGroup --query "[].{Name:name}" --output tsv
+        Write-ParameterJson-ApplicationGateway -appname $appname -prefix $prefix -node_resource_group $deploymentResult.NodeResourceGroup -vnet $vnet -cidr "10.226.0.0/24" -subnet "appgw-subnet"
+        $subscriptionDeployment = "esg-appgw-$appname-$prefix-$STAMP"
+        # Perform a what-if deployment to preview changes
+        Write-Host "Evaluating Deployment resource availabilities to preview changes..." -ForegroundColor Yellow
+# Write-Host "*** TESTING DEPLOYMENT *** NO WHAT-IF" -ForegroundColor DarkRed
+        $whatIfResult = az deployment sub what-if --parameters "@../$iac_dir/azureapplicationgateway.parameters.json" --template-file ../$iac_dir/application_gateway.bicep -l $location -n "$subscriptionDeployment"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "There might be something wrong with your deployment." -ForegroundColor Red
+            Write-Host $whatIfResult -ForegroundColor Red
+            exit 1            
+        }
+Write-Host ($whatIfResult|Format-List|Out-String)
+# Write-Host "*** TESTING DEPLOYMENT *** throwing What If Exception:" -ForegroundColor DarkRed
+# throw [System.Exception]"What If Exception"
+        Write-Host "Deployment resource availabilities have been evaluated successfully." -ForegroundColor Green
+        $deployment_output = az deployment sub create --parameters "@../$iac_dir/azureapplicationgateway.parameters.json" --template-file ../$iac_dir/application_gateway.bicep -l $location -n "$subscriptionDeployment"
+
+        $joinedString = $deployment_output -join ""
+        Write-Host $joinedString
+        # Map the deployment result to DeploymentResu
+}
 function get_fqdn {
     param(
         [Parameter(Mandatory=$true,
@@ -725,12 +897,16 @@ function get_fqdn {
     $node_ip=$(kubectl get svc -n app-routing-system -o jsonpath="{.items[?(@.metadata.name=='$($node)')].status.loadBalancer.ingress[*].ip}")
     $node_ip_name=$(az network public-ip list --query "[?ipAddress=='$node_ip'].name" --output tsv)
     $domain_name=$(az network public-ip show --resource-group $node_resource_group --name $node_ip_name --query "dnsSettings.fqdn" --output tsv)
+    Write-Host "node_resource_group=`$(az aks show --resource-group $($deploymentResult.ResourceGroupName) --name $($deploymentResult.AksName) --query nodeResourceGroup --output tsv)"
+    Write-Host "node_ip=`$(kubectl get svc -n app-routing-system -o jsonpath=`"{.items[?(@.metadata.name=='$($node)')].status.loadBalancer.ingress[*].ip}`")"
+    Write-Host "node_ip_name=`$(az network public-ip list --query `"[?ipAddress=='$node_ip'].name`" --output tsv)"
+    Write-Host "domain_name=`$(az network public-ip show --resource-group $node_resource_group --name $node_ip_name --query `"dnsSettings.fqdn`" --output tsv)"
     return $domain_name
 }
 
 function closing_remarks() {
     #####################################################################
-    # Step 8 : Display the deployment result and following instructions
+    # Step 9 : Display the deployment result and following instructions
     #####################################################################
     $FQDN = get_fqdn -Node "nginx-public-0"
     
@@ -740,6 +916,7 @@ function closing_remarks() {
         "`t- Benchmark Process Watcher: $($deploymentResult.LogicAppBenchmarkProcessWatcherName) `n`r" +
         "`t- GapAnalysis Process Watcher: $($deploymentResult.LogicAppGapAnalysisProcessWatcherName) `n`r" +
         "2. AKS Public Node 0 Ingress Load Balancer URL - https://$($FQDN) `n`r" +
+        "`t- Worker Node Resource Group $($deploymentResult.NodeResourceGroup)`n`r" +
         "3. Check GPT Model's TPM rate - Set each values high as much as you can set`n`r" +
         "`t- GPT4o Model - $($deploymentResult.AzGPT4oModelName) `n`r" +
         "`t- GPT4 32K Model - $($deploymentResult.AzGPT4_32KModelName) `n`r" +
@@ -755,6 +932,33 @@ function validate_parms() {
     }
     Write-Host "parameters found!" -ForegroundColor Green
 }
+
+function persist_local($json) {
+    # SAVE JSON FOR LATER
+    # $appname = $deploymentResult.appname
+    # $prefix = $deploymentResult.resourceprefix
+    $appname = $appname
+    $prefix = $prefix
+    $app = $deploymentResult.appname
+    $pfx = $deploymentResult.resourceprefix
+    if ([string]::IsNullOrEmpty($app)) {
+        Write-Host ($deploymentResult|Format-List|Out-String) -ForegroundColor Red
+        throw [System.Exception]"no appname from deploymentResult"
+    }
+    if ([string]::IsNullOrEmpty($pfx)) {
+        Write-Host ($deploymentResult|Format-List|Out-String) -ForegroundColor Red
+        throw [System.Exception]"no resourceprefix from deploymentResult"
+    }
+    Write-Host ($deploymentResult|Format-List|Out-String) -ForegroundColor Green
+    New-Item -Path "$LOGDIR/$app-$pfx" -ItemType Directory -Force
+    $RESULTS_JSON = "deploymentResult-$app-$pfx.json"
+    Set-Content -Path "$LOGDIR/$app-$pfx/$RESULTS_JSON" -Value $json
+    Write-Host "results json @ $LOGDIR/$app-$pfx/$RESULTS_JSON" -ForegroundColor Green
+
+    Set-Content -Path "$LOGDIR/$TIMESTAMP-$appname-$prefix/$RESULTS_JSON" -Value $json
+    Write-Host "results json @ $LOGDIR/$TIMESTAMP-$appname-$prefix/$RESULTS_JSON" -ForegroundColor Green
+}
+
 ###########################################################
 # main()
 ###########################################################
@@ -766,7 +970,19 @@ $is_testing = $false
 $iac_dir = 'bicep'
 if($is_testing) {
     $iac_dir += '-test'
+    $appname = $appname -replace "^.{3}", "tst"
 }
+
+Write-Host "*** TESTING DEPLOYMENT *** DEBUG LOGGING" -ForegroundColor DarkRed
+$TIMESTAMP = $(Get-Date -Format "yyyyMMdd_T_HHmmss")
+$LOGDIR="$HOME/log"
+New-Item -Path "$LOGDIR" -ItemType Directory -ErrorAction SilentlyContinue
+$LOG="$LOGDIR/$TIMESTAMP-$appname-$prefix/deployAzureResources-$appname-$prefix.log"
+$msg = ""
+$RESULTS_OUT = "$LOGDIR/$appname-$prefix/deploymentResult-$appname-$prefix.json"
+Start-Transcript -Path $LOG -Append -NoClobber
+Write-Host "$(date)" -ForegroundColor Blue
+Write-Host "***** START $('*' * 30) ($(Get-CurrentLine)) $msg" -ForegroundColor Green
 
 try {
     Write-Host "Script start $(Get-Date -Format 'yyyyMMdd_T_HHmmss')"
@@ -778,28 +994,44 @@ try {
         throw [System.Exception]"NOLOGIN"
     }
     Write-Host "$($json | ConvertFrom-Json | ConvertTo-Json)" -ForegroundColor Green
+    
+    Write-ParameterJson -prefix "$prefix" -appname "$appname" -aks_version '1.30.11' `
+        -gpt4 'gpt-4o' -gpt4_version '2024-05-13' `
+        -gpt4_32k 'gpt-4-32k' -gpt4_32k_version '0613' `
+        -textembedding 'text-embedding-3-large' -textembedding_version '1' `
+        -gpt4_capacity 1 -gpt4_32k_capacity 1 -textembedding_capacity 1
+    Write-Host "looking for: $RESULTS_OUT" -ForegroundColor Yellow
+    If ( -not (Test-Path -Path $RESULTS_OUT)) {
     deploy_main_services
-
+    }
+    else { # READ THE JSON CONTENTS FROM FILE
+        $json = Get-Content -Path $RESULTS_OUT -Raw
+        $jsonObject = $json | ConvertFrom-Json
+        $deploymentResult.MapResult($jsonObject)
+    }
     # Step2
     get_service_info
 
     # Step3
-    update_app_configs
+    # update_app_configs
 
     # Step4
-    build_push_container_images
+    # build_push_container_images
 
     # Step5
-    configure_k8s
-    upgrade_k8s
+    # configure_k8s
+    # upgrade_k8s
 
     # Step6
     ### REMOVED
 
     # Step7
-    configure_aks
+    # configure_aks
 
     # Step8
+    configure_appgw
+
+    # Step9
     closing_remarks
 
 } catch {

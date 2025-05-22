@@ -2,8 +2,8 @@
 # Licensed under the MIT license.
 
 # Read input from the user
-$environmentUrl = Read-Host "Enter the environment URL (e.g. https://your-environment.crm.dynamics.com)" 
-$envId = Read-Host "Enter the environment ID (e.g. dbd8ef12-e60a-efb1-b841-716cb9527f17)"
+$environmentUrl='https://esgdocanalysisdefltesgi.crm22.dynamics.com/'
+$envId='dc7e942a-dfcc-e8e2-b1d4-606ef6f56460'
 
 # Path for solution file
 $solFileRelPath = "../../Client/PowerPlatformClient.zip"

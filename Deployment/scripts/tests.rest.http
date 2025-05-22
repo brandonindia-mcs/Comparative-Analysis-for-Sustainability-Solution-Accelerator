@@ -1,0 +1,21 @@
+@host = https://esgdocanalysis-00194.swedencentral.cloudapp.azure.com
+@docmgr_post1 = /DocumentManager/RegisterDocument
+@docmgr_post2 = /DocumentManager/AskAgainstDocument
+@docmgr_get1 = /DocumentManager/GetAllDocuments
+@gap_post1 = /ESRS/ESRSGapAnalyzerOnQueue
+@gap_get1 = /ESRS/GetAllESRSGapAnalysisResults
+@bench_post1 = /ESRS/ESRSDisclosureBenchmarkOnQueue
+@bench_get1 = /ESRS/GetAllESRSBenchmarkResults
+
+
+GET {{host}}/{{docmgr_post1}} HTTP/1.1
+content-type: application/json
+
+{
+    "name": "sample",
+    "time": "Wed, 21 Oct 2015 18:27:50 GMT"
+}
+
+###
+
+GET https://www.microsoft.com HTTP/1.1
