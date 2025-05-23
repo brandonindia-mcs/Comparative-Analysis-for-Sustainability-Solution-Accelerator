@@ -134,3 +134,5 @@ resource appGateway 'Microsoft.Network/applicationGateways@2021-02-01' = {
     ]
   }
 }
+
+

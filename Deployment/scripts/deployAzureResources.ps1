@@ -346,13 +346,13 @@ function Write-ParameterJson-ApplicationGateway {
         [string]$node_resource_group,
 
         [Parameter(Mandatory=$true)]
-        [string]$vnet='aks-vnet-12767300',
+        [string]$vnet,
 
         [Parameter(Mandatory=$true)]
-        [string]$cidr='10.226.0.0/24',
+        [string]$cidr,
 
         [Parameter(Mandatory = $true)]
-        [string]$subnet='appgw-subnet',
+        [string]$subnet,
 
         [string]$filePath = "../$iac_dir/azureapplicationgateway.parameters.json"
     )
@@ -884,8 +884,33 @@ Write-Host ($whatIfResult|Format-List|Out-String)
         $deployment_output = az deployment sub create --parameters "@../$iac_dir/azureapplicationgateway.parameters.json" --template-file ../$iac_dir/application_gateway.bicep -l $location -n "$subscriptionDeployment"
 
         $joinedString = $deployment_output -join ""
-        Write-Host $joinedString
-        # Map the deployment result to DeploymentResu
+        $jsonString = ConvertFrom-Json $joinedString
+        Write-Host $jsonString
+
+        configure_addons
+}
+function configure_addons() {
+        # Write-ParameterJson-ApplicationGatewayAddon -appname $appname -prefix $prefix -node_resource_group $deploymentResult.NodeResourceGroup -vnet $vnet -cidr "10.226.0.0/24" -subnet "appgw-subnet"
+        $subscriptionDeployment = "esg-appgwaddon-$appname-$prefix-$STAMP"
+        # Perform a what-if deployment to preview changes
+        Write-Host "Evaluating Deployment resource availabilities to preview changes..." -ForegroundColor Yellow
+# Write-Host "*** TESTING DEPLOYMENT *** NO WHAT-IF" -ForegroundColor DarkRed
+        $whatIfResult = az deployment sub what-if --template-file ../$iac_dir/gateway_addon.bicep -l $location -n "$subscriptionDeployment"
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "There might be something wrong with your deployment." -ForegroundColor Red
+            Write-Host $whatIfResult -ForegroundColor Red
+            exit 1            
+        }
+Write-Host ($whatIfResult|Format-List|Out-String)
+# Write-Host "*** TESTING DEPLOYMENT *** throwing What If Exception:" -ForegroundColor DarkRed
+# throw [System.Exception]"What If Exception"
+        Write-Host "Deployment resource availabilities have been evaluated successfully." -ForegroundColor Green
+        $deployment_output = az deployment sub create --template-file ../$iac_dir/gateway_addon.bicep -l $location -n "$subscriptionDeployment"
+
+        $joinedString = $deployment_output -join ""
+        $jsonString = ConvertFrom-Json $joinedString
+        Write-Host $jsonString
+
 }
 function get_fqdn {
     param(
@@ -995,7 +1020,7 @@ try {
     }
     Write-Host "$($json | ConvertFrom-Json | ConvertTo-Json)" -ForegroundColor Green
     
-    Write-ParameterJson -prefix "$prefix" -appname "$appname" -aks_version '1.30.11' `
+    Write-ParameterJson -prefix "$prefix" -appname "$appname" -aks_version '1.30.8' `
         -gpt4 'gpt-4o' -gpt4_version '2024-05-13' `
         -gpt4_32k 'gpt-4-32k' -gpt4_32k_version '0613' `
         -textembedding 'text-embedding-3-large' -textembedding_version '1' `

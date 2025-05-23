@@ -1,4 +1,4 @@
-@host = https://esgdocanalysis-00194.swedencentral.cloudapp.azure.com
+@host = https://esgdocanalysis-00620.swedencentral.cloudapp.azure.com
 @docmgr_post1 = /DocumentManager/RegisterDocument
 @docmgr_post2 = /DocumentManager/AskAgainstDocument
 @docmgr_get1 = /DocumentManager/GetAllDocuments
@@ -8,7 +8,7 @@
 @bench_get1 = /ESRS/GetAllESRSBenchmarkResults
 
 
-GET {{host}}/{{docmgr_post1}} HTTP/1.1
+GET {{host}}/{{docmgr_get1}} HTTP/1.1
 content-type: application/json
 
 {
